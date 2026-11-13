@@ -206,7 +206,7 @@ func (vfs FuseVfs) ListXAttr(name string, context *fuse.Context) ([]string, fuse
 	return nil, fuse.ENOSYS
 }
 
-func (vfs FuseVfs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.Status {
+func (vfs FuseVfs) Mkdir(name string, mode uint32, context *fuse.Context) (status fuse.Status) {
 	log.Infof(2, "BEGIN Mkdir(%v)", name)
 	defer log.Infof(2, "END Mkdir(%v)", name)
 
@@ -218,20 +218,19 @@ func (vfs FuseVfs) Mkdir(name string, mode uint32, context *fuse.Context) fuse.S
 
 	tx, err := vfs.store.Begin()
 	if err != nil {
-		log.Fatalf("could not begin transaction: %v", err)
+		log.Warnf("could not begin transaction: %v", err)
+		return fuse.EIO
 	}
-	defer tx.Commit()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
 
 	switch path[0] {
 	case tagsDir:
 		tagName := unescape(path[1])
 
 		if _, err := vfs.store.AddTag(tx, tagName); err != nil {
-			log.Fatalf("could not create tag '%v': %v", tagName, err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			log.Fatalf("could not commit transaction: %v", err)
+			log.Warnf("could not create tag '%v': %v", tagName, err)
+			return fuse.EIO
 		}
 
 		return fuse.OK
@@ -273,7 +272,7 @@ func (vfs FuseVfs) Open(name string, flags uint32, context *fuse.Context) (nodef
 	return nil, fuse.ENOSYS
 }
 
-func (vfs FuseVfs) OpenDir(name string, context *fuse.Context) ([]fuse.DirEntry, fuse.Status) {
+func (vfs FuseVfs) OpenDir(name string, context *fuse.Context) (result []fuse.DirEntry, status fuse.Status) {
 	log.Infof(2, "BEGIN OpenDir(%v)", name)
 	defer log.Infof(2, "END OpenDir(%v)", name)
 
@@ -282,7 +281,8 @@ func (vfs FuseVfs) OpenDir(name string, context *fuse.Context) ([]fuse.DirEntry,
 		log.Warnf("could not begin transaction: %v", err)
 		return nil, fuse.EIO
 	}
-	defer tx.Commit()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
 
 	switch name {
 	case "":
@@ -305,15 +305,17 @@ func (vfs FuseVfs) OpenDir(name string, context *fuse.Context) ([]fuse.DirEntry,
 	return nil, fuse.ENOENT
 }
 
-func (vfs FuseVfs) Readlink(name string, context *fuse.Context) (string, fuse.Status) {
+func (vfs FuseVfs) Readlink(name string, context *fuse.Context) (result string, status fuse.Status) {
 	log.Infof(2, "BEGIN Readlink(%v)", name)
 	defer log.Infof(2, "END Readlink(%v)", name)
 
 	tx, err := vfs.store.Begin()
 	if err != nil {
-		log.Fatalf("could not begin transaction: %v", err)
+		log.Warnf("could not begin transaction: %v", err)
+		return "", fuse.EIO
 	}
-	defer tx.Commit()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
 
 	if name == databaseFilename {
 		return vfs.readDatabaseFileLink()
@@ -335,15 +337,17 @@ func (vfs FuseVfs) RemoveXAttr(name string, attr string, context *fuse.Context) 
 	return fuse.ENOSYS
 }
 
-func (vfs FuseVfs) Rename(oldName string, newName string, context *fuse.Context) fuse.Status {
+func (vfs FuseVfs) Rename(oldName string, newName string, context *fuse.Context) (status fuse.Status) {
 	log.Infof(2, "BEGIN Rename(%v, %v)", oldName, newName)
 	defer log.Infof(2, "END Rename(%v, %v)", oldName, newName)
 
 	tx, err := vfs.store.Begin()
 	if err != nil {
-		log.Fatalf("could not begin transaction: %v", err)
+		log.Warnf("could not begin transaction: %v", err)
+		return fuse.EIO
 	}
-	defer tx.Commit()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
 
 	oldPath := vfs.splitPath(oldName)
 	newPath := vfs.splitPath(newName)
@@ -361,32 +365,32 @@ func (vfs FuseVfs) Rename(oldName string, newName string, context *fuse.Context)
 
 	tag, err := vfs.store.TagByName(tx, oldTagName)
 	if err != nil {
-		log.Fatalf("could not retrieve tag '%v': %v", oldTagName, err)
+		log.Warnf("could not retrieve tag '%v': %v", oldTagName, err)
+		return fuse.EIO
 	}
 	if tag == nil {
 		return fuse.ENOENT
 	}
 
 	if _, err := vfs.store.RenameTag(tx, tag.Id, newTagName); err != nil {
-		log.Fatalf("could not rename tag '%v' to '%v': %v", oldTagName, newTagName, err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		log.Fatalf("could not commit transaction: %v", err)
+		log.Warnf("could not rename tag '%v' to '%v': %v", oldTagName, newTagName, err)
+		return fuse.EIO
 	}
 
 	return fuse.OK
 }
 
-func (vfs FuseVfs) Rmdir(name string, context *fuse.Context) fuse.Status {
+func (vfs FuseVfs) Rmdir(name string, context *fuse.Context) (status fuse.Status) {
 	log.Infof(2, "BEGIN Rmdir(%v)", name)
 	defer log.Infof(2, "END Rmdir(%v)", name)
 
 	tx, err := vfs.store.Begin()
 	if err != nil {
-		log.Fatalf("could not begin transaction: %v", err)
+		log.Warnf("could not begin transaction: %v", err)
+		return fuse.EIO
 	}
-	defer tx.Commit()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
 
 	path := vfs.splitPath(name)
 
@@ -400,7 +404,8 @@ func (vfs FuseVfs) Rmdir(name string, context *fuse.Context) fuse.Status {
 		tagName := unescape(path[1])
 		tag, err := vfs.store.TagByName(tx, tagName)
 		if err != nil {
-			log.Fatalf("could not retrieve tag '%v': %v", tagName, err)
+			log.Warnf("could not retrieve tag '%v': %v", tagName, err)
+			return fuse.EIO
 		}
 		if tag == nil {
 			return fuse.ENOENT
@@ -408,18 +413,16 @@ func (vfs FuseVfs) Rmdir(name string, context *fuse.Context) fuse.Status {
 
 		count, err := vfs.store.FileTagCountByTagId(tx, tag.Id, false)
 		if err != nil {
-			log.Fatalf("could not retrieve file-tag count for tag '%v': %v", tagName, err)
+			log.Warnf("could not retrieve file-tag count for tag '%v': %v", tagName, err)
+			return fuse.EIO
 		}
 		if count > 0 {
 			return fuse.Status(syscall.ENOTEMPTY)
 		}
 
 		if err := vfs.store.DeleteTag(tx, tag.Id); err != nil {
-			log.Fatalf("could not delete tag '%v': %v", tagName, err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			log.Fatalf("could not commit transaction: %v", err)
+			log.Warnf("could not delete tag '%v': %v", tagName, err)
+			return fuse.EIO
 		}
 
 		return fuse.OK
@@ -432,11 +435,8 @@ func (vfs FuseVfs) Rmdir(name string, context *fuse.Context) fuse.Status {
 		text := path[1]
 
 		if err := vfs.store.DeleteQuery(tx, text); err != nil {
-			log.Fatalf("could not remove tag '%v': %v", name, err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			log.Fatalf("could not commit transaction: %v", err)
+			log.Warnf("could not remove tag '%v': %v", name, err)
+			return fuse.EIO
 		}
 
 		return fuse.OK
@@ -477,17 +477,33 @@ func (vfs FuseVfs) Truncate(name string, offset uint64, context *fuse.Context) f
 	return fuse.ENOSYS
 }
 
-func (vfs FuseVfs) Unlink(name string, context *fuse.Context) fuse.Status {
+func (vfs FuseVfs) Unlink(name string, context *fuse.Context) (status fuse.Status) {
 	log.Infof(2, "BEGIN Unlink(%v)", name)
 	defer log.Infof(2, "END Unlink(%v)", name)
 
 	tx, err := vfs.store.Begin()
 	if err != nil {
-		log.Fatalf("could not begin transaction: %v", err)
+		log.Warnf("could not begin transaction: %v", err)
+		return fuse.EIO
 	}
-	defer tx.Commit()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
 
-	fileId := vfs.parseFileId(name)
+	path := vfs.splitPath(name)
+	if path[0] == queriesDir {
+		return fuse.EPERM
+	}
+	if path[0] == tagsDir {
+		if len(path) < 4 || path[len(path)-2] != filesDir {
+			return fuse.EPERM
+		}
+		dirName := path[len(path)-3]
+		if dirName == "" || (dirName[0] == '=' && len(path) < 5) {
+			return fuse.EPERM
+		}
+	}
+
+	fileId := vfs.parseFileId(path[len(path)-1])
 	if fileId == 0 {
 		// can only unlink file symbolic links
 		return fuse.EPERM
@@ -495,18 +511,53 @@ func (vfs FuseVfs) Unlink(name string, context *fuse.Context) fuse.Status {
 
 	file, err := vfs.store.File(tx, fileId)
 	if err != nil {
-		log.Fatalf("could not retrieve file '%v': %v", fileId, err)
+		log.Warnf("could not retrieve file '%v': %v", fileId, err)
+		return fuse.EIO
 	}
 	if file == nil {
-		// reply ok if file doesn't exist otherwise recursive deletes fail
-		return fuse.OK
+		return fuse.ENOENT
 	}
-	path := vfs.splitPath(name)
-
 	switch path[0] {
 	case tagsDir:
-		dirName := path[len(path)-3]
+		if path[len(path)-1] != vfs.getLinkName(file) {
+			return fuse.ENOENT
+		}
 
+		// Reject paths that cannot be traversed in the tag directory tree.
+		selected := make(map[string]bool)
+		tagPath := path[1 : len(path)-2]
+		for i, element := range tagPath {
+			if element == "" || element == filesDir {
+				return fuse.ENOENT
+			}
+			if element[0] == '=' {
+				if i == 0 || tagPath[i-1][0] == '=' || element != "="+escape(unescape(element[1:])) {
+					return fuse.ENOENT
+				}
+			} else {
+				if element != escape(unescape(element)) || selected[element] {
+					return fuse.ENOENT
+				}
+				selected[element] = true
+			}
+		}
+		files, err := vfs.store.FilesForQuery(tx, pathToExpression(tagPath), "", false, false, "name")
+		if err != nil {
+			log.Warnf("could not query files: %v", err)
+			return fuse.EIO
+		}
+		found := false
+		for _, candidate := range files {
+			if candidate.Id == fileId {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fuse.ENOENT
+		}
+
+		dirName := path[len(path)-3]
 		var tagName, valueName string
 		if dirName[0] == '=' {
 			tagName = unescape(path[len(path)-4])
@@ -518,31 +569,39 @@ func (vfs FuseVfs) Unlink(name string, context *fuse.Context) fuse.Status {
 
 		tag, err := vfs.store.TagByName(tx, tagName)
 		if err != nil {
-			log.Fatal(err)
+			log.Warnf("storage operation failed: %v", err)
+			return fuse.EIO
 		}
 		if tag == nil {
-			log.Fatalf("could not retrieve tag '%v'.", tagName)
+			return fuse.ENOENT
 		}
 
 		value, err := vfs.store.ValueByName(tx, valueName)
 		if err != nil {
-			log.Fatal(err)
+			log.Warnf("storage operation failed: %v", err)
+			return fuse.EIO
 		}
 		if value == nil {
-			log.Fatalf("could not retrieve value '%v'.", valueName)
+			return fuse.ENOENT
+		}
+
+		explicit, err := vfs.store.FileTagExists(tx, fileId, tag.Id, value.Id, true)
+		if err != nil {
+			log.Warnf("could not check explicit file tag: %v", err)
+			return fuse.EIO
+		}
+		if !explicit {
+			// An implied tag (or a valued tag viewed without its value) cannot
+			// be removed by deleting this link.
+			return fuse.EPERM
 		}
 
 		if err = vfs.store.DeleteFileTag(tx, fileId, tag.Id, value.Id); err != nil {
-			log.Fatal(err)
-		}
-
-		if err := tx.Commit(); err != nil {
-			log.Fatalf("could not commit transaction: %v", err)
+			log.Warnf("storage operation failed: %v", err)
+			return fuse.EIO
 		}
 
 		return fuse.OK
-	case queriesDir:
-		return fuse.EPERM
 	}
 
 	return fuse.ENOSYS
@@ -550,6 +609,23 @@ func (vfs FuseVfs) Unlink(name string, context *fuse.Context) fuse.Status {
 
 func (vfs FuseVfs) Utimens(name string, Atime *time.Time, Mtime *time.Time, context *fuse.Context) (code fuse.Status) {
 	return fuse.ENOSYS
+}
+
+// finishTransaction commits successful operations and discards all other work.
+// Callers initialize status to EIO before deferring this, so a panic rolls back.
+func finishTransaction(tx *storage.Tx, status fuse.Status) fuse.Status {
+	if status != fuse.OK {
+		if err := tx.Rollback(); err != nil {
+			log.Warnf("could not roll back transaction: %v", err)
+			return fuse.EIO
+		}
+		return status
+	}
+	if err := tx.Commit(); err != nil {
+		log.Warnf("could not commit transaction: %v", err)
+		return fuse.EIO
+	}
+	return status
 }
 
 // unexported
@@ -649,19 +725,22 @@ func (vfs FuseVfs) getFilesAttr(path []string) (*fuse.Attr, fuse.Status) {
 	return &fuse.Attr{Mode: fuse.S_IFDIR | 0755, Nlink: 2, Size: 0, Mtime: uint64(now.Unix()), Mtimensec: uint32(now.Nanosecond())}, fuse.OK
 }
 
-func (vfs FuseVfs) getTagsAttr() (*fuse.Attr, fuse.Status) {
+func (vfs FuseVfs) getTagsAttr() (result *fuse.Attr, status fuse.Status) {
 	log.Infof(2, "BEGIN getTagsAttr")
 	defer log.Infof(2, "END getTagsAttr")
 
 	tx, err := vfs.store.Begin()
 	if err != nil {
-		log.Fatalf("could not begin transaction: %v", err)
+		log.Warnf("could not begin transaction: %v", err)
+		return nil, fuse.EIO
 	}
-	defer tx.Commit()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
 
 	tagCount, err := vfs.store.TagCount(tx)
 	if err != nil {
-		log.Fatalf("could not get tag count: %v", err)
+		log.Warnf("could not get tag count: %v", err)
+		return nil, fuse.EIO
 	}
 
 	now := time.Now()
@@ -676,7 +755,7 @@ func (vfs FuseVfs) getQueryAttr() (*fuse.Attr, fuse.Status) {
 	return &fuse.Attr{Mode: fuse.S_IFDIR | 0755, Nlink: 2, Size: 0, Mtime: uint64(now.Unix()), Mtimensec: uint32(now.Nanosecond())}, fuse.OK
 }
 
-func (vfs FuseVfs) getTaggedEntryAttr(path []string) (*fuse.Attr, fuse.Status) {
+func (vfs FuseVfs) getTaggedEntryAttr(path []string) (result *fuse.Attr, status fuse.Status) {
 	log.Infof(2, "BEGIN getTaggedEntryAttr(%v)", path)
 	defer log.Infof(2, "END getTaggedEntryAttr(%v)", path)
 
@@ -709,7 +788,8 @@ func (vfs FuseVfs) getTaggedEntryAttr(path []string) (*fuse.Attr, fuse.Status) {
 		log.Warnf("could not begin transaction: %v", err)
 		return nil, fuse.EIO
 	}
-	defer tx.Commit()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
 
 	tagIds, err := vfs.tagNamesToIds(tx, tagNames)
 	if err != nil {
@@ -724,7 +804,7 @@ func (vfs FuseVfs) getTaggedEntryAttr(path []string) (*fuse.Attr, fuse.Status) {
 	return &fuse.Attr{Mode: fuse.S_IFDIR | 0755, Nlink: 2, Size: uint64(0), Mtime: uint64(now.Unix()), Mtimensec: uint32(now.Nanosecond())}, fuse.OK
 }
 
-func (vfs FuseVfs) getQueryEntryAttr(path []string) (*fuse.Attr, fuse.Status) {
+func (vfs FuseVfs) getQueryEntryAttr(path []string) (result *fuse.Attr, status fuse.Status) {
 	log.Infof(2, "BEGIN getQueryEntryAttr(%v)", path)
 	defer log.Infof(2, "END getQueryEntryAttr(%v)", path)
 
@@ -761,7 +841,8 @@ func (vfs FuseVfs) getQueryEntryAttr(path []string) (*fuse.Attr, fuse.Status) {
 		log.Warnf("could not begin transaction: %v", err)
 		return nil, fuse.EIO
 	}
-	defer tx.Commit()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
 
 	tagNames, err := query.TagNames(expression)
 	if err != nil {
@@ -802,7 +883,8 @@ func (vfs FuseVfs) getDatabaseFileAttr() (*fuse.Attr, fuse.Status) {
 
 	fileInfo, err := os.Stat(databasePath)
 	if err != nil {
-		log.Fatalf("could not stat database: %v", err)
+		log.Warnf("could not stat database: %v", err)
+		return nil, fuse.EIO
 	}
 
 	modTime := fileInfo.ModTime()
@@ -810,16 +892,19 @@ func (vfs FuseVfs) getDatabaseFileAttr() (*fuse.Attr, fuse.Status) {
 	return &fuse.Attr{Mode: fuse.S_IFLNK | 0755, Size: uint64(fileInfo.Size()), Mtime: uint64(modTime.Unix()), Mtimensec: uint32(modTime.Nanosecond())}, fuse.OK
 }
 
-func (vfs FuseVfs) getFileEntryAttr(fileId entities.FileId) (*fuse.Attr, fuse.Status) {
+func (vfs FuseVfs) getFileEntryAttr(fileId entities.FileId) (result *fuse.Attr, status fuse.Status) {
 	tx, err := vfs.store.Begin()
 	if err != nil {
-		log.Fatalf("could not begin transaction: %v", err)
+		log.Warnf("could not begin transaction: %v", err)
+		return nil, fuse.EIO
 	}
-	defer tx.Commit()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
 
 	file, err := vfs.store.File(tx, fileId)
 	if err != nil {
-		log.Fatalf("could not retrieve file #%v: %v", fileId, err)
+		log.Warnf("could not retrieve file #%v: %v", fileId, err)
+		return nil, fuse.EIO
 	}
 	if file == nil {
 		return &fuse.Attr{Mode: fuse.S_IFREG}, fuse.ENOENT
@@ -977,13 +1062,19 @@ func (vfs FuseVfs) readTaggedEntryLink(tx *storage.Tx, path []string) (string, f
 
 	file, err := vfs.store.File(tx, fileId)
 	if err != nil {
-		log.Fatalf("could not find file %v in database.", fileId)
+		log.Warnf("could not find file %v in database: %v", fileId, err)
+		return "", fuse.EIO
+	}
+
+	if file == nil {
+		return "", fuse.ENOENT
 	}
 
 	absDirPath := filepath.Join(vfs.mountPath, filepath.Join(path[:len(path)-1]...))
 	relPath, err := filepath.Rel(absDirPath, file.Path())
 	if err != nil {
-		log.Fatalf("could not make relative path: %v", err)
+		log.Warnf("could not make relative path: %v", err)
+		return "", fuse.EIO
 	}
 
 	return relPath, fuse.OK
