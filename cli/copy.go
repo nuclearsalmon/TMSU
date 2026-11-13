@@ -34,7 +34,7 @@ var CopyCommand = Command{
 
 // unexported
 
-func copyExec(options Options, args []string, databasePath string) (error, warnings) {
+func copyExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	if len(args) < 2 {
 		return fmt.Errorf("too few arguments"), nil
 	}
@@ -56,7 +56,7 @@ func copyExec(options Options, args []string, databasePath string) (error, warni
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	sourceTag, err := store.TagByName(tx, sourceTagName)
 	if err != nil {

@@ -48,7 +48,7 @@ mp3 -> music`,
 
 // unexported
 
-func implyExec(options Options, args []string, databasePath string) (error, warnings) {
+func implyExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	store, err := openDatabase(databasePath)
 	if err != nil {
 		return err, nil
@@ -59,7 +59,7 @@ func implyExec(options Options, args []string, databasePath string) (error, warn
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	colour, err := useColour(options)
 	if err != nil {

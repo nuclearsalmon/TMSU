@@ -37,7 +37,7 @@ If a VALUE is specified then the setting is updated.`,
 
 // unexported
 
-func configExec(options Options, args []string, databasePath string) (error, warnings) {
+func configExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	store, err := openDatabase(databasePath)
 	if err != nil {
 		return err, nil
@@ -48,7 +48,7 @@ func configExec(options Options, args []string, databasePath string) (error, war
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	if len(args) == 0 {
 		if err := listAllSettings(store, tx); err != nil {

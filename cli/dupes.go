@@ -40,7 +40,7 @@ var DupesCommand = Command{
 
 // unexported
 
-func dupesExec(options Options, args []string, databasePath string) (error, warnings) {
+func dupesExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	recursive := options.HasOption("--recursive")
 
 	store, err := openDatabase(databasePath)
@@ -53,7 +53,7 @@ func dupesExec(options Options, args []string, databasePath string) (error, warn
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	switch len(args) {
 	case 0:

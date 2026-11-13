@@ -45,7 +45,7 @@ var UntagCommand = Command{
 
 // unexported
 
-func untagExec(options Options, args []string, databasePath string) (error, warnings) {
+func untagExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	if len(args) < 1 {
 		return fmt.Errorf("too few arguments"), nil
 	}
@@ -63,7 +63,7 @@ func untagExec(options Options, args []string, databasePath string) (error, warn
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	if options.HasOption("--all") {
 		if len(args) < 1 {

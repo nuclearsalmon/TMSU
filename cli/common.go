@@ -47,6 +47,27 @@ func openDatabase(path string) (*storage.Storage, error) {
 	return storage, nil
 }
 
+type transaction interface {
+	Commit() error
+	Rollback() error
+}
+
+func finishTransaction(tx transaction, resultErr *error) {
+	if p := recover(); p != nil {
+		_ = tx.Rollback()
+		panic(p)
+	}
+	if *resultErr != nil {
+		if err := tx.Rollback(); err != nil {
+			*resultErr = fmt.Errorf("%w (could not roll back transaction: %v)", *resultErr, err)
+		}
+		return
+	}
+	if err := tx.Commit(); err != nil {
+		*resultErr = fmt.Errorf("could not commit transaction: %w", err)
+	}
+}
+
 func stdoutIsCharDevice() bool {
 	stat, err := os.Stdout.Stat()
 	if err != nil {

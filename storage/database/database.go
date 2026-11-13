@@ -20,7 +20,9 @@ import (
 	"errors"
 	_ "github.com/mattn/go-sqlite3" // initialised Sqlite3
 	"github.com/oniony/TMSU/common/log"
+	"net/url"
 	"os"
+	"path/filepath"
 )
 
 type Database struct {
@@ -41,6 +43,7 @@ func CreateAt(path string) error {
 		return DatabaseTransactionError{path, err}
 	}
 
+	defer tx.Rollback()
 	if err := upgrade(tx); err != nil {
 		return err
 	}
@@ -72,18 +75,41 @@ func OpenAt(path string) (*Database, error) {
 
 	tx, err := db.Begin()
 	if err != nil {
+		db.Close()
 		return nil, DatabaseTransactionError{path, err}
 	}
 
 	if err := upgrade(tx); err != nil {
+		tx.Rollback()
+		db.Close()
 		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
+		db.Close()
 		return nil, DatabaseTransactionError{path, err}
 	}
 
 	return &Database{db}, nil
+}
+
+// SnapshotAt copies a consistent SQLite snapshot without upgrading the source.
+func SnapshotAt(path, destination string) error {
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(absPath), RawQuery: "mode=ro"}
+	db, err := sql.Open("sqlite3", u.String())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	_, err = db.Exec("VACUUM INTO ?", destination)
+	return err
 }
 
 func (database *Database) Close() error {

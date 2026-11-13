@@ -38,7 +38,7 @@ var InfoCommand = Command{
 
 // unexported
 
-func infoExec(options Options, args []string, databasePath string) (error, warnings) {
+func infoExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	stats := options.HasOption("--stats")
 	usage := options.HasOption("--usage")
 	colour, err := useColour(options)
@@ -56,7 +56,7 @@ func infoExec(options Options, args []string, databasePath string) (error, warni
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	showBasic(store, tx, colour)
 

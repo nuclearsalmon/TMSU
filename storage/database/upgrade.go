@@ -17,6 +17,7 @@ package database
 
 import (
 	"database/sql"
+	"fmt"
 	"github.com/oniony/TMSU/common"
 	"github.com/oniony/TMSU/common/log"
 )
@@ -24,7 +25,13 @@ import (
 // unexported
 
 func upgrade(tx *sql.Tx) error {
-	version := currentSchemaVersion(tx)
+	version, err := currentSchemaVersion(tx)
+	if err != nil {
+		return err
+	}
+	if version.GreaterThan(latestSchemaVersion) {
+		return fmt.Errorf("database schema version %v is newer than supported version %v", version, latestSchemaVersion)
+	}
 
 	log.Infof(2, "database schema has version %v, latest schema version is %v", version, latestSchemaVersion)
 

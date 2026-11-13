@@ -62,7 +62,7 @@ Note: If your tag or value name contains whitespace, operators (e.g. '<') or par
 
 // unexported
 
-func filesExec(options Options, args []string, databasePath string) (error, warnings) {
+func filesExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	dirOnly := options.HasOption("--directory")
 	fileOnly := options.HasOption("--file")
 	print0 := options.HasOption("--print0")
@@ -97,7 +97,7 @@ func filesExec(options Options, args []string, databasePath string) (error, warn
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	queryText := strings.Join(args, " ")
 	return listFilesForQuery(store, tx, queryText, absPath, dirOnly, fileOnly, print0, showCount, explicitOnly, ignoreCase, sort)

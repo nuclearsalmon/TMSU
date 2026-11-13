@@ -32,9 +32,18 @@ func (version schemaVersion) String() string {
 }
 
 func (this schemaVersion) LessThan(that schemaVersion) bool {
-	return this.Major < that.Major || this.Minor < that.Minor || this.Patch < that.Patch || this.Revision < that.Revision
+	if this.Major != that.Major {
+		return this.Major < that.Major
+	}
+	if this.Minor != that.Minor {
+		return this.Minor < that.Minor
+	}
+	if this.Patch != that.Patch {
+		return this.Patch < that.Patch
+	}
+	return this.Revision < that.Revision
 }
 
 func (this schemaVersion) GreaterThan(that schemaVersion) bool {
-	return this.Major > that.Major || this.Minor > that.Minor || this.Patch > that.Patch || this.Revision > that.Revision
+	return that.LessThan(this)
 }
