@@ -2,19 +2,19 @@
 
 # test
 
-touch /tmp/tmsu/file1
-tmsu copy aubergine eggplant    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+touch ${TEST_DIR}/file1
+tmsu copy aubergine eggplant    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: no such tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - </dev/null
+diff ${TEST_DIR}/stdout - </dev/null
 if [[ $? -ne 0 ]]; then
     exit 1
 fi

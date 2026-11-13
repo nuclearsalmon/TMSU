@@ -2,20 +2,20 @@
 
 # test
 
-tmsu tag --force /tmp/tmsu/noexist aubergine    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu tags /tmp/tmsu/noexist                     >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tag --force ${TEST_DIR}/noexist aubergine    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu tags ${TEST_DIR}/noexist                     >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/noexist: aubergine
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/noexist: aubergine
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

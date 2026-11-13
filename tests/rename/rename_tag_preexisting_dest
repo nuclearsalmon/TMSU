@@ -2,16 +2,16 @@
 
 # setup
 
-touch /tmp/tmsu/file1
-tmsu tag /tmp/tmsu/file1 aubergine eggplant    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+touch ${TEST_DIR}/file1
+tmsu tag ${TEST_DIR}/file1 aubergine eggplant    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # test
 
-tmsu rename aubergine eggplant                 >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu rename aubergine eggplant                 >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 tmsu: new tag 'eggplant'
 tmsu: tag 'eggplant' already exists
@@ -20,7 +20,7 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - </dev/null
+diff ${TEST_DIR}/stdout - </dev/null
 if [[ $? -ne 0 ]]; then
     exit 1
 fi

@@ -2,13 +2,13 @@
 
 # test
 
-tmsu imply food=aubergine class=vegetable    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu imply food=aubergine class=vegetable    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-tmsu imply                                   >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr  
+tmsu imply                                   >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'food'
 tmsu: new value 'aubergine'
 tmsu: new tag 'class'
@@ -18,7 +18,7 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 food=aubergine -> class=vegetable
 EOF
 if [[ $? -ne 0 ]]; then

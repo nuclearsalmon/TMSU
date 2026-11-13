@@ -2,25 +2,25 @@
 
 # setup
 
-tmsu tag --tags="crocodile" --force '/tmp/tmsu/file:' '/tmp/tmsu/file\' '/tmp/tmsu/file\:'    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu tag --tags="crocodile" --force "${TEST_DIR}"'/file:' "${TEST_DIR}"'/file\' "${TEST_DIR}"'/file\:'    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # test
 
-tmsu tags '/tmp/tmsu/file:' '/tmp/tmsu/file\' '/tmp/tmsu/file\:'                              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tags "${TEST_DIR}"'/file:' "${TEST_DIR}"'/file\' "${TEST_DIR}"'/file\:'                              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'crocodile'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file\\:: crocodile
-/tmp/tmsu/file\\\\: crocodile
-/tmp/tmsu/file\\\\\\:: crocodile
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file\\:: crocodile
+${TEST_DIR}/file\\\\: crocodile
+${TEST_DIR}/file\\\\\\:: crocodile
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

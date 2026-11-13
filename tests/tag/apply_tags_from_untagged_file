@@ -2,22 +2,22 @@
 
 # setup
 
-touch /tmp/tmsu/{file1,file2}
+touch ${TEST_DIR}/{file1,file2}
 
 # test
 
-tmsu tag --from=/tmp/tmsu/file1 /tmp/tmsu/file2    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tag --from=${TEST_DIR}/file1 ${TEST_DIR}/file2    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
-tmsu: /tmp/tmsu/file1: path is not tagged
+diff ${TEST_DIR}/stderr - <<EOF
+tmsu: ${TEST_DIR}/file1: path is not tagged
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

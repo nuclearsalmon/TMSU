@@ -2,26 +2,26 @@
 
 # setup
 
-echo 1 >/tmp/tmsu/file1
-echo 2 >/tmp/tmsu/file2
-tmsu tag --tags="aubergine" /tmp/tmsu/file1 /tmp/tmsu/file2    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+echo 1 >${TEST_DIR}/file1
+echo 2 >${TEST_DIR}/file2
+tmsu tag --tags="aubergine" ${TEST_DIR}/file1 ${TEST_DIR}/file2    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # test
 
-tmsu tags /tmp/tmsu/file1 /tmp/tmsu/file2                      >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tags ${TEST_DIR}/file1 ${TEST_DIR}/file2                      >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1: aubergine
-/tmp/tmsu/file2: aubergine
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1: aubergine
+${TEST_DIR}/file2: aubergine
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

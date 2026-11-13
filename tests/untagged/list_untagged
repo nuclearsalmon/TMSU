@@ -2,29 +2,29 @@
 
 # setup
 
-mkdir /tmp/tmsu/dir
-touch /tmp/tmsu/dir/file1
-touch /tmp/tmsu/dir/file2
-touch /tmp/tmsu/dir/file3
-tmsu tag /tmp/tmsu/dir/file1 aubergine    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+mkdir ${TEST_DIR}/dir
+touch ${TEST_DIR}/dir/file1
+touch ${TEST_DIR}/dir/file2
+touch ${TEST_DIR}/dir/file3
+tmsu tag ${TEST_DIR}/dir/file1 aubergine    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # test
 
-tmsu untagged /tmp/tmsu/dir | sort        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu untagged ${TEST_DIR}/dir | sort        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/dir
-/tmp/tmsu/dir/file2
-/tmp/tmsu/dir/file3
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/dir
+${TEST_DIR}/dir/file2
+${TEST_DIR}/dir/file3
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

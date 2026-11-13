@@ -2,25 +2,25 @@
 
 # setup
 
-touch /tmp/tmsu/file1
-tmsu tag /tmp/tmsu/file1 '<\=([!$%&!])\=>'            >/dev/null 2>&1
+touch ${TEST_DIR}/file1
+tmsu tag ${TEST_DIR}/file1 '<\=([!$%&!])\=>'            >/dev/null 2>&1
 
 # test
 
-tmsu files \\\<\\=\\\(\[\\\!\$%\&\\\!\]\\\)\\=\\\>    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu files '\<\=\([\!$%&\!]\)\=\>'                    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu files \\\<\\=\\\(\[\\\!\$%\&\\\!\]\\\)\\=\\\>    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu files '\<\=\([\!$%&\!]\)\=\>'                    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1
-/tmp/tmsu/file1
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1
+${TEST_DIR}/file1
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

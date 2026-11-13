@@ -2,17 +2,17 @@
 
 # test
 
-tmsu config autoCreateTags=no fileFingerprintAlgorithm=none    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu config autoCreateTags fileFingerprintAlgorithm            >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu config autoCreateTags=no fileFingerprintAlgorithm=none    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu config autoCreateTags fileFingerprintAlgorithm            >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - </dev/null
+diff ${TEST_DIR}/stderr - </dev/null
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 autoCreateTags=no
 fileFingerprintAlgorithm=none
 EOF

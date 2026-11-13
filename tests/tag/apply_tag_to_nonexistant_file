@@ -2,19 +2,19 @@
 
 # test
 
-tmsu tag /tmp/tmsu/noexist aubergine    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu tag ${TEST_DIR}/noexist aubergine    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
-tmsu: /tmp/tmsu/noexist: no such file
+tmsu: ${TEST_DIR}/noexist: no such file
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

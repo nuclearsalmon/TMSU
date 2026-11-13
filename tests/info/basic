@@ -2,19 +2,19 @@
 
 # test
 
-tmsu info    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu info    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff -I "^Size" /tmp/tmsu/stdout - <<EOF
-Database: /tmp/tmsu/.tmsu/db
-Root path: /tmp/tmsu
+diff -I "^Size" ${TEST_DIR}/stdout - <<EOF
+Database: ${TEST_DIR}/.tmsu/db
+Root path: ${TEST_DIR}
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

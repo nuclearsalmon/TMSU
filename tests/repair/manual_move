@@ -2,27 +2,27 @@
 
 # setup
 
-touch /tmp/tmsu/file1
-tmsu tag /tmp/tmsu/file1 aubergine                       >/dev/null 2>&1
-mv /tmp/tmsu/file1 /tmp/tmsu/file1b                      >/dev/null 2>&1
+touch ${TEST_DIR}/file1
+tmsu tag ${TEST_DIR}/file1 aubergine                       >/dev/null 2>&1
+mv ${TEST_DIR}/file1 ${TEST_DIR}/file1b                      >/dev/null 2>&1
 
 # test
 
-tmsu repair --manual /tmp/tmsu/file1 /tmp/tmsu/file1b    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu repair --manual ${TEST_DIR}/file1 ${TEST_DIR}/file1b    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-tmsu tags /tmp/tmsu/file1 /tmp/tmsu/file1b               >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tags ${TEST_DIR}/file1 ${TEST_DIR}/file1b               >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
-tmsu: /tmp/tmsu/file1: no such file
+diff ${TEST_DIR}/stderr - <<EOF
+tmsu: ${TEST_DIR}/file1: no such file
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1b: aubergine
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1b: aubergine
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

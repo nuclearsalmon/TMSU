@@ -1,24 +1,35 @@
 #!/usr/bin/env bash
 
-if [[ -z $1 ]]; then
+if [[ $# -eq 0 ]]; then
     echo "no testcase paths specified" >&2
     exit 1
 fi
 
-export TESTS_DIR=$(dirname $BASH_SOURCE[0])
-export PATH=$TESTS_DIR/../bin:$PATH
+export TESTS_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+export PATH="${TMSU_BIN_DIR:-$TESTS_DIR/../bin}:$PATH"
 
-for testcase in $*; do
-    . $TESTS_DIR/setup
+cleanup() {
+    if [[ -n ${TEST_DIR:-} ]]; then
+        "$TESTS_DIR/teardown" "$TEST_DIR"
+        unset TEST_DIR
+    fi
+}
+trap cleanup EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
 
-    $testcase
-    export RC=$?
+for testcase in "$@"; do
+    if ! . "$TESTS_DIR/setup"; then
+        echo "$testcase [SETUP FAIL]" >&2
+        exit 1
+    fi
 
+    "$testcase"
+    RC=$?
     echo -n "$testcase "
     if [[ $RC -eq 0 ]]; then
         echo "[PASS]"
-
-        $TESTS_DIR/teardown
+        cleanup
     else
         echo "[FAIL]"
         exit 1

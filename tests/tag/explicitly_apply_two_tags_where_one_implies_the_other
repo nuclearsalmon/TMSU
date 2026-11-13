@@ -2,18 +2,18 @@
 
 # setup
 
-touch /tmp/tmsu/file1
+touch ${TEST_DIR}/file1
 
 # test
 
-tmsu imply aubergine vegetable                             >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu tag --explicit /tmp/tmsu/file1 aubergine vegetable    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/file1                       >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags /tmp/tmsu/file1                                  >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu imply aubergine vegetable                             >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu tag --explicit ${TEST_DIR}/file1 aubergine vegetable    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/file1                       >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags ${TEST_DIR}/file1                                  >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 tmsu: new tag 'vegetable'
 EOF
@@ -21,9 +21,9 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1: aubergine vegetable
-/tmp/tmsu/file1: aubergine vegetable
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1: aubergine vegetable
+${TEST_DIR}/file1: aubergine vegetable
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

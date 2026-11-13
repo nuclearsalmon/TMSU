@@ -2,14 +2,14 @@
 
 # test
 
-tmsu imply aubergine vegetable    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu imply vegetable food         >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu imply aubergine vegetable    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu imply vegetable food         >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-tmsu imply                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu imply                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 tmsu: new tag 'vegetable'
 tmsu: new tag 'food'
@@ -18,7 +18,7 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 aubergine -> vegetable
 vegetable -> food
 EOF

@@ -2,16 +2,16 @@
 
 # test
 
-tmsu config    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu config    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - </dev/null
+diff ${TEST_DIR}/stderr - </dev/null
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 autoCreateTags=yes
 autoCreateValues=yes
 directoryFingerprintAlgorithm=none

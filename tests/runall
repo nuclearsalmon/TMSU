@@ -1,16 +1,27 @@
 #!/usr/bin/env bash
 
-if [[ -z $1 ]]; then
-    files=$( find . -mindepth 2 -perm /+x )
-else
-    files=$( find $1 -mindepth 1 -perm /+x )
+TESTS_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+cd "$TESTS_DIR" || exit 1
+
+if [[ $# -gt 1 ]]; then
+    echo "usage: $0 [test-directory]" >&2
+    exit 1
 fi
 
-export RC=0
+if [[ $# -eq 0 ]]; then
+    search_dir=.
+    min_depth=2
+else
+    search_dir=$1
+    min_depth=1
+fi
+if [[ ! -d $search_dir ]]; then
+    echo "not a test directory: $search_dir" >&2
+    exit 1
+fi
 
-for testcase in $files; do
-    ./run $testcase
-    export RC=$(( $RC + $? ))
-done
-
-exit $RC
+rc=0
+while IFS= read -r -d '' testcase; do
+    ./run "$testcase" || rc=1
+done < <(find "$search_dir" -mindepth "$min_depth" -type f -perm /111 -print0)
+exit "$rc"

@@ -2,28 +2,28 @@
 
 # setup
 
-touch /tmp/tmsu/file1
-tmsu tag /tmp/tmsu/file1 aubergine vegetable    >/dev/null 2>&1
+touch ${TEST_DIR}/file1
+tmsu tag ${TEST_DIR}/file1 aubergine vegetable    >/dev/null 2>&1
 tmsu imply aubergine vegetable                  >/dev/null 2>&1
 
 # test
 
-tmsu repair --rationalize                       >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu repair --rationalize                       >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-tmsu tags /tmp/tmsu/file1                       >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/file1            >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tags ${TEST_DIR}/file1                       >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/file1            >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1: aubergine vegetable
-/tmp/tmsu/file1: aubergine
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1: aubergine vegetable
+${TEST_DIR}/file1: aubergine
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

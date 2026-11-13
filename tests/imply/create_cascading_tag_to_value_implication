@@ -2,14 +2,14 @@
 
 # test
 
-tmsu imply aubergine food=vegetable         >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu imply food=vegetable song=plantlife    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu imply aubergine food=vegetable         >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu imply food=vegetable song=plantlife    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-tmsu imply                             >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu imply                             >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 tmsu: new tag 'food'
 tmsu: new value 'vegetable'
@@ -20,7 +20,7 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
      aubergine -> food=vegetable
 food=vegetable -> song=plantlife
 EOF

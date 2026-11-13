@@ -2,17 +2,17 @@
 
 # setup
 
-touch /tmp/tmsu/file1
+touch ${TEST_DIR}/file1
 
 # test
 
-tmsu tag /tmp/tmsu/file1 one\\=two     >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 'two\=three'  >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags /tmp/tmsu/file1              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tag ${TEST_DIR}/file1 one\\=two     >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 'two\=three'  >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags ${TEST_DIR}/file1              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'one=two'
 tmsu: new tag 'two=three'
 EOF
@@ -20,8 +20,8 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1: one\=two two\=three
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1: one\=two two\=three
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
