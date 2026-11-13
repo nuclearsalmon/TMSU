@@ -103,9 +103,6 @@ WHERE text = ?`
 
 func readQuery(rows *sql.Rows) (*entities.Query, error) {
 	if !rows.Next() {
-		return nil, nil
-	}
-	if rows.Err() != nil {
 		return nil, rows.Err()
 	}
 

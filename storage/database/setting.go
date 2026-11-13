@@ -88,9 +88,6 @@ VALUES (?, ?)`
 
 func readSetting(rows *sql.Rows) (*entities.Setting, error) {
 	if !rows.Next() {
-		return nil, nil
-	}
-	if rows.Err() != nil {
 		return nil, rows.Err()
 	}
 

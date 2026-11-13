@@ -19,6 +19,7 @@
 package vfs
 
 import (
+	"context"
 	"fmt"
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/hanwen/go-fuse/fuse/nodefs"
@@ -89,13 +90,22 @@ as this will untag the contained files.
 (This file will hide once you have created a query.)`
 
 type FuseVfs struct {
-	store     *storage.Storage
-	mountPath string
-	server    *fuse.Server
+	store      *storage.Storage
+	mountPath  string
+	server     *fuse.Server
+	sqlTimeout time.Duration
 }
 
 func MountVfs(store *storage.Storage, mountPath string, options []string) (*FuseVfs, error) {
-	fuseVfs := FuseVfs{nil, "", nil}
+	timeout := 30 * time.Second
+	if value := os.Getenv("TMSU_VFS_SQL_TIMEOUT"); value != "" {
+		var err error
+		timeout, err = time.ParseDuration(value)
+		if err != nil || timeout <= 0 {
+			return nil, fmt.Errorf("invalid TMSU_VFS_SQL_TIMEOUT %q: expected a positive duration", value)
+		}
+	}
+	fuseVfs := FuseVfs{sqlTimeout: timeout}
 
 	pathFs := pathfs.NewPathNodeFs(&fuseVfs, nil)
 	conn := nodefs.NewFileSystemConnector(pathFs.Root(), nil)
@@ -216,11 +226,12 @@ func (vfs FuseVfs) Mkdir(name string, mode uint32, context *fuse.Context) (statu
 		return fuse.EPERM
 	}
 
-	tx, err := vfs.store.Begin()
+	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
 		return fuse.EIO
 	}
+	defer cancel()
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
@@ -276,11 +287,12 @@ func (vfs FuseVfs) OpenDir(name string, context *fuse.Context) (result []fuse.Di
 	log.Infof(2, "BEGIN OpenDir(%v)", name)
 	defer log.Infof(2, "END OpenDir(%v)", name)
 
-	tx, err := vfs.store.Begin()
+	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
 		return nil, fuse.EIO
 	}
+	defer cancel()
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
@@ -309,11 +321,12 @@ func (vfs FuseVfs) Readlink(name string, context *fuse.Context) (result string, 
 	log.Infof(2, "BEGIN Readlink(%v)", name)
 	defer log.Infof(2, "END Readlink(%v)", name)
 
-	tx, err := vfs.store.Begin()
+	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
 		return "", fuse.EIO
 	}
+	defer cancel()
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
@@ -341,11 +354,12 @@ func (vfs FuseVfs) Rename(oldName string, newName string, context *fuse.Context)
 	log.Infof(2, "BEGIN Rename(%v, %v)", oldName, newName)
 	defer log.Infof(2, "END Rename(%v, %v)", oldName, newName)
 
-	tx, err := vfs.store.Begin()
+	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
 		return fuse.EIO
 	}
+	defer cancel()
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
@@ -384,11 +398,12 @@ func (vfs FuseVfs) Rmdir(name string, context *fuse.Context) (status fuse.Status
 	log.Infof(2, "BEGIN Rmdir(%v)", name)
 	defer log.Infof(2, "END Rmdir(%v)", name)
 
-	tx, err := vfs.store.Begin()
+	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
 		return fuse.EIO
 	}
+	defer cancel()
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
@@ -481,11 +496,12 @@ func (vfs FuseVfs) Unlink(name string, context *fuse.Context) (status fuse.Statu
 	log.Infof(2, "BEGIN Unlink(%v)", name)
 	defer log.Infof(2, "END Unlink(%v)", name)
 
-	tx, err := vfs.store.Begin()
+	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
 		return fuse.EIO
 	}
+	defer cancel()
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
@@ -611,9 +627,27 @@ func (vfs FuseVfs) Utimens(name string, Atime *time.Time, Mtime *time.Time, cont
 	return fuse.ENOSYS
 }
 
+// beginSQL gives all SQL in one VFS transaction a shared deadline. It does not
+// bound filesystem I/O, SQLite lock waits, or transaction cleanup.
+func (vfs FuseVfs) beginSQL() (*storage.Tx, context.CancelFunc, error) {
+	timeout := vfs.sqlTimeout
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	tx, err := vfs.store.BeginContext(ctx)
+	if err != nil {
+		cancel()
+	}
+	return tx, cancel, err
+}
+
 // finishTransaction commits successful operations and discards all other work.
 // Callers initialize status to EIO before deferring this, so a panic rolls back.
 func finishTransaction(tx *storage.Tx, status fuse.Status) fuse.Status {
+	if tx.Err() != nil {
+		status = fuse.EIO
+	}
 	if status != fuse.OK {
 		if err := tx.Rollback(); err != nil {
 			log.Warnf("could not roll back transaction: %v", err)
@@ -729,11 +763,12 @@ func (vfs FuseVfs) getTagsAttr() (result *fuse.Attr, status fuse.Status) {
 	log.Infof(2, "BEGIN getTagsAttr")
 	defer log.Infof(2, "END getTagsAttr")
 
-	tx, err := vfs.store.Begin()
+	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
 		return nil, fuse.EIO
 	}
+	defer cancel()
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
@@ -783,11 +818,12 @@ func (vfs FuseVfs) getTaggedEntryAttr(path []string) (result *fuse.Attr, status 
 		}
 	}
 
-	tx, err := vfs.store.Begin()
+	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
 		return nil, fuse.EIO
 	}
+	defer cancel()
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
@@ -836,11 +872,12 @@ func (vfs FuseVfs) getQueryEntryAttr(path []string) (result *fuse.Attr, status f
 		return nil, fuse.ENOENT
 	}
 
-	tx, err := vfs.store.Begin()
+	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
 		return nil, fuse.EIO
 	}
+	defer cancel()
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
@@ -893,11 +930,12 @@ func (vfs FuseVfs) getDatabaseFileAttr() (*fuse.Attr, fuse.Status) {
 }
 
 func (vfs FuseVfs) getFileEntryAttr(fileId entities.FileId) (result *fuse.Attr, status fuse.Status) {
-	tx, err := vfs.store.Begin()
+	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
 		return nil, fuse.EIO
 	}
+	defer cancel()
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 

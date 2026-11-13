@@ -16,6 +16,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"github.com/oniony/TMSU/common/log"
 	"github.com/oniony/TMSU/storage/database"
@@ -49,7 +50,11 @@ func OpenAt(path string) (*Storage, error) {
 }
 
 func (storage *Storage) Begin() (*Tx, error) {
-	tx, err := storage.db.Begin()
+	return storage.BeginContext(context.Background())
+}
+
+func (storage *Storage) BeginContext(ctx context.Context) (*Tx, error) {
+	tx, err := storage.db.BeginContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -74,6 +79,10 @@ func (storage *Storage) Close() error {
 
 type Tx struct {
 	tx *database.Tx
+}
+
+func (tx *Tx) Err() error {
+	return tx.tx.Err()
 }
 
 func (tx *Tx) Commit() error {

@@ -275,9 +275,6 @@ WHERE id = ?`
 
 func readValue(rows *sql.Rows) (*entities.Value, error) {
 	if !rows.Next() {
-		return nil, nil
-	}
-	if rows.Err() != nil {
 		return nil, rows.Err()
 	}
 

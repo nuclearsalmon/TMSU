@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
 	"github.com/oniony/TMSU/storage"
@@ -34,11 +35,12 @@ func TestVFSBrowsingAndQueryErrors(t *testing.T) {
 	}
 	exec("INSERT INTO tag(id,name) VALUES (1,?), (2,?), (3,?), (4,?)", `genre\kind`, "other", "implied", "chain")
 	exec("INSERT INTO value(id,name) VALUES (1,?), (2,?), (3,?)", `rock\pop`, "implicit-value", "jazz")
-	exec("INSERT INTO implication VALUES (1,0,3,2), (3,2,4,0)")
+	exec("INSERT INTO implication VALUES (1,1,3,2), (1,3,3,2), (3,2,4,0), (4,0,1,0)")
 	for i := 1; i <= 10000; i++ {
 		exec("INSERT INTO file(id,directory,name,fingerprint,mod_time,size,is_dir) VALUES (?, '/', ?, '', '2020-01-01', 0, 0)", i, fmt.Sprintf("file%d", i))
 		exec("INSERT INTO file_tag VALUES (?,1,1)", i)
 	}
+	exec("INSERT INTO file(id,directory,name,fingerprint,mod_time,size,is_dir) VALUES (10001, '/', 'unmatched', '', '2020-01-01', 0, 0)")
 	exec("INSERT INTO file_tag VALUES (1,2,0)")
 	exec("INSERT INTO file_tag VALUES (2,1,3)")
 	exec("INSERT INTO tag(id,name) VALUES (10005,?)", "slash/name")
@@ -97,6 +99,12 @@ func TestVFSBrowsingAndQueryErrors(t *testing.T) {
 	names = list("tags/implied")
 	if !names["=implicit-value"] || !names["chain"] {
 		t.Error("implied value or transitive tag missing")
+	}
+	for _, path := range []string{"queries/implied", "queries/implied=implicit-value", "tags/implied/files"} {
+		members := list(path)
+		if len(members) != 10000 || !members["file1.1"] || !members["file2.2"] || members["unmatched.10001"] {
+			t.Errorf("cyclic implication %q: count=%d file1=%v file2=%v", path, len(members), members["file1.1"], members["file2.2"])
+		}
 	}
 	if _, status := v.OpenDir("queries/other", nil); status != fuse.OK {
 		t.Fatalf("valid query: %v", status)
@@ -229,6 +237,78 @@ func TestVFSTransactionPanicRollback(t *testing.T) {
 	var count int
 	if err := db.QueryRow("SELECT count(*) FROM tag WHERE name='uncommitted'").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("panic did not roll back: count=%d err=%v", count, err)
+	}
+}
+
+func TestVFSOperationSQLTimeout(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db")
+	if err := storage.CreateAt(path); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	_, err = db.Exec(`CREATE TRIGGER slow_insert BEFORE INSERT ON tag BEGIN
+		SELECT (WITH RECURSIVE n(x) AS (VALUES(0) UNION ALL SELECT x+1 FROM n)
+		        SELECT sum(x) FROM n);
+	END`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.OpenAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	v := FuseVfs{store: store, sqlTimeout: 100 * time.Millisecond}
+	if status := v.Mkdir("tags/slow", 0, nil); status != fuse.EIO {
+		t.Fatalf("timed-out Mkdir status = %v", status)
+	}
+	if _, err := db.Exec("DROP TRIGGER slow_insert"); err != nil {
+		t.Fatal(err)
+	}
+	var count int
+	if err := db.QueryRow("SELECT count(*) FROM tag WHERE name='slow'").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("timed-out insert count=%d err=%v", count, err)
+	}
+	if status := v.Mkdir("tags/after", 0, nil); status != fuse.OK {
+		t.Fatalf("Mkdir after timeout status = %v", status)
+	}
+}
+
+func TestVFSDeadlineRollsBack(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db")
+	if err := storage.CreateAt(path); err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.OpenAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	v := FuseVfs{store: store, sqlTimeout: 50 * time.Millisecond}
+	tx, cancel, err := v.beginSQL()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cancel()
+	if _, err := store.AddTag(tx, "uncommitted"); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	if got := finishTransaction(tx, fuse.OK); got != fuse.EIO {
+		t.Fatalf("expired transaction status = %v", got)
+	}
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	var count int
+	if err := db.QueryRow("SELECT count(*) FROM tag WHERE name='uncommitted'").Scan(&count); err != nil || count != 0 {
+		t.Fatalf("expired transaction count=%d err=%v", count, err)
 	}
 }
 

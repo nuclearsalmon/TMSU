@@ -287,5 +287,8 @@ func readFileTags(rows *sql.Rows, fileTags entities.FileTags) (entities.FileTags
 		fileTags = append(fileTags, &entities.FileTag{entities.FileId(fileId), tagId, valueId, true, false})
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return fileTags, nil
 }
