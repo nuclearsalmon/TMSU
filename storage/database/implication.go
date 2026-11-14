@@ -208,9 +208,6 @@ WHERE value_id = ?1 OR implied_value_id = ?1`
 
 func readImplication(rows *sql.Rows) (*entities.Implication, error) {
 	if !rows.Next() {
-		return nil, nil
-	}
-	if rows.Err() != nil {
 		return nil, rows.Err()
 	}
 

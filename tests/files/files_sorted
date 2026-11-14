@@ -2,27 +2,27 @@
 
 # setup
 
-touch /tmp/tmsu/{file1,file2}
-tmsu tag --tags="aubergine" /tmp/tmsu/file2 /tmp/tmsu/file1    >/dev/null 2>&1
+touch ${TEST_DIR}/{file1,file2}
+tmsu tag --tags="aubergine" ${TEST_DIR}/file2 ${TEST_DIR}/file1    >/dev/null 2>&1
 
 # test
 
-tmsu files --sort=name aubergine                               >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu files --sort=id aubergine                                 >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu files --sort=name aubergine                               >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu files --sort=id aubergine                                 >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1
-/tmp/tmsu/file2
-/tmp/tmsu/file2
-/tmp/tmsu/file1
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1
+${TEST_DIR}/file2
+${TEST_DIR}/file2
+${TEST_DIR}/file1
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

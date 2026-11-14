@@ -2,28 +2,28 @@
 
 # setup
 
-echo 1 >/tmp/tmsu/file4
-tmsu tag /tmp/tmsu/file4 aubergine            >/dev/null 2>&1
-mv /tmp/tmsu/file4 /tmp/tmsu/file4b           >/dev/null 2>&1
+echo 1 >${TEST_DIR}/file4
+tmsu tag ${TEST_DIR}/file4 aubergine            >/dev/null 2>&1
+mv ${TEST_DIR}/file4 ${TEST_DIR}/file4b           >/dev/null 2>&1
 
 # test
 
-tmsu repair /tmp/tmsu                         >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu repair ${TEST_DIR}                         >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-tmsu tags /tmp/tmsu/file4 /tmp/tmsu/file4b    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tags ${TEST_DIR}/file4 ${TEST_DIR}/file4b    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
-tmsu: /tmp/tmsu/file4: no such file
+diff ${TEST_DIR}/stderr - <<EOF
+tmsu: ${TEST_DIR}/file4: no such file
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file4: updated path to /tmp/tmsu/file4b
-/tmp/tmsu/file4b: aubergine
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file4: updated path to ${TEST_DIR}/file4b
+${TEST_DIR}/file4b: aubergine
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

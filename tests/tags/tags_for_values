@@ -2,27 +2,27 @@
 
 # setup
 
-touch /tmp/tmsu/file1 /tmp/tmsu/file2
-tmsu tag /tmp/tmsu/file1 color=orange    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file2 fruit=orange    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+touch ${TEST_DIR}/file1 ${TEST_DIR}/file2
+tmsu tag ${TEST_DIR}/file1 color=orange    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file2 fruit=orange    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # test
 
-tmsu tags --value orange                 >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tags --value orange                 >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'color'
 tmsu: new value 'orange'
 tmsu: new tag 'fruit'
-tmsu: '/tmp/tmsu/file2' is a duplicate
+tmsu: '${TEST_DIR}/file2' is a duplicate
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 orange: color fruit
 EOF
 if [[ $? -ne 0 ]]; then

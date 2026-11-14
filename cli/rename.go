@@ -37,7 +37,7 @@ Attempting to rename a tag or value with a name that already exists will result 
 
 // unexported
 
-func renameExec(options Options, args []string, databasePath string) (error, warnings) {
+func renameExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	if len(args) < 2 {
 		return fmt.Errorf("too few arguments"), nil
 	}
@@ -59,7 +59,7 @@ func renameExec(options Options, args []string, databasePath string) (error, war
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	if options.HasOption("--value") {
 		return renameValue(store, tx, currentName, newName), nil

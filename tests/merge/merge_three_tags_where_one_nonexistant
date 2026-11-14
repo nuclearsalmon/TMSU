@@ -2,26 +2,26 @@
 
 # setup
 
-touch /tmp/tmsu/file1
+touch ${TEST_DIR}/file1
 
-tmsu tag /tmp/tmsu/file1 aubergine potato   >/dev/null 2>&1
+tmsu tag ${TEST_DIR}/file1 aubergine potato   >/dev/null 2>&1
 
 # test
 
-tmsu merge aubergine brocolli potato        >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu merge aubergine brocolli potato        >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-tmsu tags                                   >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tags                                   >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: no such tag 'brocolli'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 potato
 EOF
 if [[ $? -ne 0 ]]; then

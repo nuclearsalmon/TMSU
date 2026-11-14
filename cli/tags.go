@@ -57,7 +57,7 @@ See the 'imply' subcommand for more information on implied tags.`,
 
 // unexported
 
-func tagsExec(options Options, args []string, databasePath string) (error, warnings) {
+func tagsExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	showCount := options.HasOption("--count")
 	onePerLine := options.HasOption("-1")
 	explicitOnly := options.HasOption("--explicit")
@@ -82,7 +82,7 @@ func tagsExec(options Options, args []string, databasePath string) (error, warni
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	if options.HasOption("--value") {
 		return listTagsForValues(store, tx, args, showCount, onePerLine, colour, printName)

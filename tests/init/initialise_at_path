@@ -2,16 +2,16 @@
 
 # setup
 
-rm -rf /tmp/tmsu/init_test
-mkdir -p /tmp/tmsu/init_test
+rm -rf ${TEST_DIR}/init_test
+mkdir -p ${TEST_DIR}/init_test
 
 # test
 
-tmsu init /tmp/tmsu/init_test    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu init ${TEST_DIR}/init_test    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-if [[ ! -f /tmp/tmsu/init_test/.tmsu/db  ]]; then
+if [[ ! -f ${TEST_DIR}/init_test/.tmsu/db  ]]; then
     echo "database was not created"
     exit 1
 fi

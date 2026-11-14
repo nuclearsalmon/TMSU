@@ -70,7 +70,7 @@ Note: The equals '=' and whitespace characters must be escaped with a backslash 
 
 // unexported
 
-func tagExec(options Options, args []string, databasePath string) (error, warnings) {
+func tagExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	recursive := options.HasOption("--recursive")
 	includeHidden := options.HasOption("--include-hidden")
 	explicit := options.HasOption("--explicit")
@@ -87,7 +87,7 @@ func tagExec(options Options, args []string, databasePath string) (error, warnin
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	switch {
 	case options.HasOption("--create"):

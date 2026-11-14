@@ -34,7 +34,7 @@ var DeleteCommand = Command{
 
 // unexported
 
-func deleteExec(options Options, args []string, databasePath string) (error, warnings) {
+func deleteExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	if len(args) == 0 {
 		return fmt.Errorf("too few arguments"), nil
 	}
@@ -49,7 +49,7 @@ func deleteExec(options Options, args []string, databasePath string) (error, war
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	if options.HasOption("--value") {
 		return deleteValue(store, tx, args)

@@ -2,27 +2,27 @@
 
 # setup
 
-mkdir /tmp/tmsu/dir1
-touch /tmp/tmsu/dir1/file1
+mkdir ${TEST_DIR}/dir1
+touch ${TEST_DIR}/dir1/file1
 
 # test
 
-tmsu tag --recursive /tmp/tmsu/dir1 aubergine    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/dir1              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/dir1/file1        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tag --recursive ${TEST_DIR}/dir1 aubergine    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/dir1              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/dir1/file1        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/dir1: aubergine
-/tmp/tmsu/dir1/file1: aubergine
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/dir1: aubergine
+${TEST_DIR}/dir1/file1: aubergine
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

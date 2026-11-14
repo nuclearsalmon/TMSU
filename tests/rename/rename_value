@@ -2,18 +2,18 @@
 
 # setup
 
-touch /tmp/tmsu/file1
-tmsu tag /tmp/tmsu/file1 year=2015    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+touch ${TEST_DIR}/file1
+tmsu tag ${TEST_DIR}/file1 year=2015    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # test
 
-tmsu rename --value 2015 2016         >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu rename --value 2015 2016         >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-tmsu files year=2016                  >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu files year=2016                  >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'year'
 tmsu: new value '2015'
 EOF
@@ -21,8 +21,8 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

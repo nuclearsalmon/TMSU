@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
 
-# destroy the test directory
-rm -r /tmp/tmsu 2>/dev/null
+# Only remove a directory created by the runner, never a fixed shared path.
+if [[ $# -ne 1 || ! $1 =~ ^/tmp/tmsu-test\.[a-zA-Z0-9]{8}$ || -L $1 ]]; then
+    echo "refusing to remove unsafe test directory: ${1:-<empty>}" >&2
+    exit 1
+fi
+rm -rf -- "$1"

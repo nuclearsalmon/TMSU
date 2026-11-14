@@ -4,18 +4,18 @@
 
 # setup
 
-touch /tmp/tmsu/file1
-tmsu tag /tmp/tmsu/file1 aubergine    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+touch ${TEST_DIR}/file1
+tmsu tag ${TEST_DIR}/file1 aubergine    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # test
 
-tmsu copy aubergine aubergine         >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu copy aubergine aubergine         >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-tmsu tags                             >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tags                             >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 tmsu: a tag with name 'aubergine' already exists
 EOF
@@ -23,7 +23,7 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 aubergine
 EOF
 if [[ $? -ne 0 ]]; then

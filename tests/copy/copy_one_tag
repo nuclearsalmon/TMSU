@@ -2,28 +2,28 @@
 
 # setup
 
-touch /tmp/tmsu/file1
-tmsu tag /tmp/tmsu/file1 aubergine    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+touch ${TEST_DIR}/file1
+tmsu tag ${TEST_DIR}/file1 aubergine    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # test
 
-tmsu copy aubergine eggplant          >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu copy aubergine eggplant          >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-tmsu files aubergine                  >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files eggplant                   >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu files aubergine                  >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files eggplant                   >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1
-/tmp/tmsu/file1
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1
+${TEST_DIR}/file1
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

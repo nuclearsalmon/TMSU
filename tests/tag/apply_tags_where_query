@@ -1,20 +1,20 @@
 #!/usr/bin/env bash
 
-echo 1 >/tmp/tmsu/file1
-echo 2 >/tmp/tmsu/file2
-echo 3 >/tmp/tmsu/file3
+echo 1 >${TEST_DIR}/file1
+echo 2 >${TEST_DIR}/file2
+echo 3 >${TEST_DIR}/file3
 
 # test
 
-tmsu tag /tmp/tmsu/file1 aubergine                          >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file2 potato                             >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file3 shiny-purple-veg                   >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag --where="aubergine or shiny-purple-veg" eggplant   >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags /tmp/tmsu/file1 /tmp/tmsu/file2 /tmp/tmsu/file3   >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tag ${TEST_DIR}/file1 aubergine                          >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file2 potato                             >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file3 shiny-purple-veg                   >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag --where="aubergine or shiny-purple-veg" eggplant   >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags ${TEST_DIR}/file1 ${TEST_DIR}/file2 ${TEST_DIR}/file3   >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 tmsu: new tag 'potato'
 tmsu: new tag 'shiny-purple-veg'
@@ -24,10 +24,10 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1: aubergine eggplant
-/tmp/tmsu/file2: potato
-/tmp/tmsu/file3: eggplant shiny-purple-veg
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1: aubergine eggplant
+${TEST_DIR}/file2: potato
+${TEST_DIR}/file3: eggplant shiny-purple-veg
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

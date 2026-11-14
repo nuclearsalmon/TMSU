@@ -2,25 +2,25 @@
 
 # setup
 
-touch /tmp/tmsu/file1
-tmsu tag /tmp/tmsu/file1 vegetable=aubergine    >/dev/null 2>&1
+touch ${TEST_DIR}/file1
+tmsu tag ${TEST_DIR}/file1 vegetable=aubergine    >/dev/null 2>&1
 
 # test
 
-tmsu merge --value aubergine aubergine          >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu merge --value aubergine aubergine          >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-tmsu values                                     >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu values                                     >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: cannot merge value 'aubergine' into itself
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 aubergine
 EOF
 if [[ $? -ne 0 ]]; then

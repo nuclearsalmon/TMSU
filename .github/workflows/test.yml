@@ -1,0 +1,27 @@
+name: Tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache: true
+      - name: Runner regression tests
+        run: bash tests/runner_regression.sh
+      - name: Go tests
+        run: go test ./...
+      - name: Build integration test binary
+        run: mkdir -p "$RUNNER_TEMP/tmsu-bin" && go build -o "$RUNNER_TEMP/tmsu-bin/tmsu" .
+      - name: Integration tests
+        run: TMSU_BIN_DIR="$RUNNER_TEMP/tmsu-bin" tests/runall

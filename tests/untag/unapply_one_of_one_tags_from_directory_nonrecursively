@@ -2,29 +2,29 @@
 
 # test
 
-mkdir -p /tmp/tmsu/dir
-echo 1 >/tmp/tmsu/dir/file1
-tmsu tag --recursive /tmp/tmsu/dir aubergine              >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/dir /tmp/tmsu/dir/file1    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu untag /tmp/tmsu/dir aubergine                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/dir /tmp/tmsu/dir/file1    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu untagged /tmp/tmsu/dir /tmp/tmsu/dir/file1           >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+mkdir -p ${TEST_DIR}/dir
+echo 1 >${TEST_DIR}/dir/file1
+tmsu tag --recursive ${TEST_DIR}/dir aubergine              >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/dir ${TEST_DIR}/dir/file1    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu untag ${TEST_DIR}/dir aubergine                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/dir ${TEST_DIR}/dir/file1    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu untagged ${TEST_DIR}/dir ${TEST_DIR}/dir/file1           >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/dir: aubergine
-/tmp/tmsu/dir/file1: aubergine
-/tmp/tmsu/dir:
-/tmp/tmsu/dir/file1: aubergine
-/tmp/tmsu/dir
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/dir: aubergine
+${TEST_DIR}/dir/file1: aubergine
+${TEST_DIR}/dir:
+${TEST_DIR}/dir/file1: aubergine
+${TEST_DIR}/dir
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

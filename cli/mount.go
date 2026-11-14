@@ -52,7 +52,7 @@ For further documentation on the usage of the --database option, refer to 'tmsu 
 
 // unexported
 
-func mountExec(options Options, args []string, databasePath string) (error, warnings) {
+func mountExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	var mountOptions string
 	if options.HasOption("--options") {
 		mountOptions = options.Get("--options").Argument
@@ -68,7 +68,7 @@ func mountExec(options Options, args []string, databasePath string) (error, warn
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	switch len(args) {
 	case 0:

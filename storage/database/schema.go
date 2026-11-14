@@ -25,28 +25,54 @@ import (
 
 var latestSchemaVersion = schemaVersion{common.Version{0, 7, 0}, 1}
 
-func currentSchemaVersion(tx *sql.Tx) schemaVersion {
-	sql := `
-SELECT *
-FROM version`
+func currentSchemaVersion(tx *sql.Tx) (schemaVersion, error) {
+	var exists int
+	if err := tx.QueryRow("SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'version'").Scan(&exists); err != nil {
+		return schemaVersion{}, fmt.Errorf("could not inspect schema version: %w", err)
+	}
+	if exists == 0 {
+		return schemaVersion{}, nil
+	}
 
-	var major, minor, patch, revision uint
-
-	rows, err := tx.Query(sql)
+	rows, err := tx.Query("SELECT * FROM version")
 	if err != nil {
-		return schemaVersion{}
+		return schemaVersion{}, fmt.Errorf("could not read schema version: %w", err)
 	}
 	defer rows.Close()
-
-	if rows.Next() && rows.Err() == nil {
-		err := rows.Scan(&major, &minor, &patch, &revision)
-		if err != nil {
-			// might be prior to schema 0.7.0-1 where there was no revision column
-			rows.Scan(&major, &minor, &patch) // ignore errors
+	columns, err := rows.Columns()
+	if err != nil {
+		return schemaVersion{}, fmt.Errorf("could not read schema version columns: %w", err)
+	}
+	if len(columns) != 3 && len(columns) != 4 {
+		return schemaVersion{}, fmt.Errorf("malformed schema version: expected 3 or 4 columns, got %d", len(columns))
+	}
+	for i, name := range columns {
+		if name != []string{"major", "minor", "patch", "revision"}[i] {
+			return schemaVersion{}, fmt.Errorf("malformed schema version: unexpected column %q", name)
 		}
 	}
-
-	return schemaVersion{common.Version{major, minor, patch}, revision}
+	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return schemaVersion{}, fmt.Errorf("could not read schema version: %w", err)
+		}
+		return schemaVersion{}, fmt.Errorf("malformed schema version: no rows")
+	}
+	var major, minor, patch, revision uint
+	if len(columns) == 3 {
+		err = rows.Scan(&major, &minor, &patch)
+	} else {
+		err = rows.Scan(&major, &minor, &patch, &revision)
+	}
+	if err != nil {
+		return schemaVersion{}, fmt.Errorf("malformed schema version: %w", err)
+	}
+	if rows.Next() {
+		return schemaVersion{}, fmt.Errorf("malformed schema version: multiple rows")
+	}
+	if err := rows.Err(); err != nil {
+		return schemaVersion{}, fmt.Errorf("could not read schema version: %w", err)
+	}
+	return schemaVersion{common.Version{major, minor, patch}, revision}, nil
 }
 
 func insertSchemaVersion(tx *sql.Tx, version schemaVersion) error {

@@ -255,6 +255,9 @@ ORDER BY t.name`
 		tags = append(tags, entities.TagFileCount{tagId, name, count})
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return tags, nil
 }
 
@@ -262,9 +265,6 @@ ORDER BY t.name`
 
 func readTag(rows *sql.Rows) (*entities.Tag, error) {
 	if !rows.Next() {
-		return nil, nil
-	}
-	if rows.Err() != nil {
 		return nil, rows.Err()
 	}
 

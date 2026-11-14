@@ -16,6 +16,7 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/oniony/TMSU/common/fingerprint"
@@ -23,6 +24,8 @@ import (
 	_path "github.com/oniony/TMSU/common/path"
 	"github.com/oniony/TMSU/entities"
 	"github.com/oniony/TMSU/storage"
+	"github.com/oniony/TMSU/storage/database"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,46 +64,94 @@ When run with the --manual option, any paths that begin with OLD are updated to 
 func repairExec(options Options, args []string, databasePath string) (error, warnings) {
 	pretend := options.HasOption("--pretend")
 
-	store, err := openDatabase(databasePath)
+	openPath := databasePath
+	if pretend {
+		dir, err := os.MkdirTemp("", "tmsu-repair-")
+		if err != nil {
+			return err, nil
+		}
+		defer os.RemoveAll(dir)
+		openPath = filepath.Join(dir, "snapshot.db")
+		if err := database.SnapshotAt(databasePath, openPath); err != nil {
+			return fmt.Errorf("could not snapshot database: %w", err), nil
+		}
+	}
+	store, err := openDatabase(openPath)
 	if err != nil {
 		return err, nil
 	}
 	defer store.Close()
+	if pretend {
+		absPath, err := filepath.Abs(databasePath)
+		if err != nil {
+			return err, nil
+		}
+		store.DbPath = databasePath
+		store.RootPath = string(filepath.Separator)
+		if filepath.Base(filepath.Dir(absPath)) == ".tmsu" {
+			store.RootPath = filepath.Dir(filepath.Dir(absPath))
+		}
+	}
 
 	tx, err := store.Begin()
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer tx.Rollback()
 
-	if options.HasOption("--manual") {
-		if len(args) < 2 {
-			return errors.New("too few arguments"), nil
+	var output bytes.Buffer
+	err = func() error {
+		if options.HasOption("--manual") {
+			if len(args) < 2 {
+				return errors.New("too few arguments")
+			}
+
+			fromPath := args[0]
+			toPath := args[1]
+
+			if err := manualRepair(store, tx, fromPath, toPath, pretend); err != nil {
+				return err
+			}
+		} else {
+			searchPaths := args
+			removeMissing := options.HasOption("--remove")
+			recalcUnmodified := options.HasOption("--unmodified")
+			rationalize := options.HasOption("--rationalize")
+
+			limitPath := ""
+			if options.HasOption("--path") {
+				limitPath = options.Get("--path").Argument
+			}
+
+			if err := fullRepair(store, tx, searchPaths, limitPath, removeMissing, recalcUnmodified, rationalize, pretend, &output); err != nil {
+				return err
+			}
 		}
+		return nil
+	}()
 
-		fromPath := args[0]
-		toPath := args[1]
+	return finishRepairTransaction(tx, err, pretend, &output, os.Stdout), nil
+}
 
-		if err := manualRepair(store, tx, fromPath, toPath, pretend); err != nil {
-			return err, nil
+func finishRepairTransaction(tx interface {
+	Commit() error
+	Rollback() error
+}, err error, pretend bool, output *bytes.Buffer, destination io.Writer) error {
+	if err != nil || pretend {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			if err != nil {
+				return fmt.Errorf("%w (rollback failed: %v)", err, rollbackErr)
+			}
+			return fmt.Errorf("could not rollback repair: %w", rollbackErr)
 		}
-	} else {
-		searchPaths := args
-		removeMissing := options.HasOption("--remove")
-		recalcUnmodified := options.HasOption("--unmodified")
-		rationalize := options.HasOption("--rationalize")
-
-		limitPath := ""
-		if options.HasOption("--path") {
-			limitPath = options.Get("--path").Argument
-		}
-
-		if err := fullRepair(store, tx, searchPaths, limitPath, removeMissing, recalcUnmodified, rationalize, pretend); err != nil {
-			return err, nil
-		}
+	} else if commitErr := tx.Commit(); commitErr != nil {
+		return fmt.Errorf("could not commit repair: %w", commitErr)
 	}
-
-	return nil, nil
+	if err != nil {
+		return err
+	}
+	_, err = output.WriteTo(destination)
+	return err
 }
 
 func manualRepair(store *storage.Storage, tx *storage.Tx, fromPath, toPath string, pretend bool) error {
@@ -186,7 +237,7 @@ func manualRepairFile(store *storage.Storage, tx *storage.Tx, file *entities.Fil
 	}
 }
 
-func fullRepair(store *storage.Storage, tx *storage.Tx, searchPaths []string, limitPath string, removeMissing, recalcUnmodified, rationalize, pretend bool) error {
+func fullRepair(store *storage.Storage, tx *storage.Tx, searchPaths []string, limitPath string, removeMissing, recalcUnmodified, rationalize, pretend bool, output io.Writer) error {
 	absLimitPath := ""
 	if limitPath != "" {
 		var err error
@@ -219,33 +270,38 @@ func fullRepair(store *storage.Storage, tx *storage.Tx, searchPaths []string, li
 
 	log.Infof(2, "retrieved %v files from the database for path '%v'", len(dbFiles), absLimitPath)
 
-	unmodfied, modified, missing := determineStatuses(dbFiles)
+	unmodfied, modified, missing, err := determineStatuses(dbFiles)
+	if err != nil {
+		return err
+	}
 
 	if recalcUnmodified {
-		if err = repairUnmodified(store, tx, unmodfied, pretend, settings); err != nil {
+		if err = repairUnmodified(store, tx, unmodfied, pretend, settings, output); err != nil {
 			return err
 		}
 	}
 
-	if err = repairModified(store, tx, modified, pretend, settings); err != nil {
+	if err = repairModified(store, tx, modified, pretend, settings, output); err != nil {
 		return err
 	}
 
-	if err = repairMoved(store, tx, missing, searchPaths, pretend, settings); err != nil {
+	if err = repairMoved(store, tx, missing, searchPaths, pretend, settings, output); err != nil {
 		return err
 	}
 
-	if err = repairMissing(store, tx, missing, pretend, removeMissing); err != nil {
+	if err = repairMissing(store, tx, missing, pretend, removeMissing, output); err != nil {
 		return err
 	}
 
-	if err = deleteUntaggedFiles(store, tx, dbFiles); err != nil {
-		return err
-	}
-
-	if rationalize {
-		if err = rationalizeFileTags(store, tx, dbFiles); err != nil {
+	if !pretend {
+		if err = deleteUntaggedFiles(store, tx, dbFiles); err != nil {
 			return err
+		}
+
+		if rationalize {
+			if err = rationalizeFileTags(store, tx, dbFiles); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -286,7 +342,7 @@ func rationalizeFileTags(store *storage.Storage, tx *storage.Tx, files entities.
 	return nil
 }
 
-func determineStatuses(dbFiles entities.Files) (unmodified, modified, missing entities.Files) {
+func determineStatuses(dbFiles entities.Files) (unmodified, modified, missing entities.Files, err error) {
 	log.Infof(2, "determining file statuses")
 
 	unmodified = make(entities.Files, 0, 10)
@@ -306,6 +362,8 @@ func determineStatuses(dbFiles entities.Files) (unmodified, modified, missing en
 				log.Infof(2, "%v: missing", dbFile.Path())
 				missing = append(missing, dbFile)
 				continue
+			default:
+				return nil, nil, nil, fmt.Errorf("%v: could not stat file: %w", dbFile.Path(), err)
 			}
 		}
 
@@ -321,7 +379,7 @@ func determineStatuses(dbFiles entities.Files) (unmodified, modified, missing en
 	return
 }
 
-func repairUnmodified(store *storage.Storage, tx *storage.Tx, unmodified entities.Files, pretend bool, settings entities.Settings) error {
+func repairUnmodified(store *storage.Storage, tx *storage.Tx, unmodified entities.Files, pretend bool, settings entities.Settings, output io.Writer) error {
 	log.Infof(2, "recalculating fingerprints for unmodified files")
 
 	for _, dbFile := range unmodified {
@@ -343,13 +401,13 @@ func repairUnmodified(store *storage.Storage, tx *storage.Tx, unmodified entitie
 			}
 		}
 
-		fmt.Printf("%v: recalculated fingerprint\n", dbFile.Path())
+		fmt.Fprintf(output, "%v: recalculated fingerprint\n", dbFile.Path())
 	}
 
 	return nil
 }
 
-func repairModified(store *storage.Storage, tx *storage.Tx, modified entities.Files, pretend bool, settings entities.Settings) error {
+func repairModified(store *storage.Storage, tx *storage.Tx, modified entities.Files, pretend bool, settings entities.Settings, output io.Writer) error {
 	log.Infof(2, "repairing modified files")
 
 	for _, dbFile := range modified {
@@ -371,13 +429,13 @@ func repairModified(store *storage.Storage, tx *storage.Tx, modified entities.Fi
 			}
 		}
 
-		fmt.Printf("%v: updated fingerprint\n", dbFile.Path())
+		fmt.Fprintf(output, "%v: updated fingerprint\n", dbFile.Path())
 	}
 
 	return nil
 }
 
-func repairMoved(store *storage.Storage, tx *storage.Tx, missing entities.Files, searchPaths []string, pretend bool, settings entities.Settings) error {
+func repairMoved(store *storage.Storage, tx *storage.Tx, missing entities.Files, searchPaths []string, pretend bool, settings entities.Settings, output io.Writer) error {
 	log.Infof(2, "repairing moved files")
 
 	if len(missing) == 0 || len(searchPaths) == 0 {
@@ -390,6 +448,7 @@ func repairMoved(store *storage.Storage, tx *storage.Tx, missing entities.Files,
 		return err
 	}
 
+	reserved := make(map[string]bool)
 	for index, dbFile := range missing {
 		log.Infof(2, "%v: searching for new location", dbFile.Path())
 
@@ -397,6 +456,9 @@ func repairMoved(store *storage.Storage, tx *storage.Tx, missing entities.Files,
 		log.Infof(2, "%v: file is of size %v, identified %v files of this size", dbFile.Path(), dbFile.Size, len(pathsOfSize))
 
 		for _, candidatePath := range pathsOfSize {
+			if reserved[candidatePath] {
+				continue
+			}
 			candidateFile, err := store.FileByPath(tx, candidatePath)
 			if err != nil {
 				return err
@@ -424,8 +486,9 @@ func repairMoved(store *storage.Storage, tx *storage.Tx, missing entities.Files,
 					}
 				}
 
-				fmt.Printf("%v: updated path to %v\n", dbFile.Path(), candidatePath)
+				fmt.Fprintf(output, "%v: updated path to %v\n", dbFile.Path(), candidatePath)
 
+				reserved[candidatePath] = true
 				missing[index] = nil
 
 				break
@@ -436,7 +499,7 @@ func repairMoved(store *storage.Storage, tx *storage.Tx, missing entities.Files,
 	return nil
 }
 
-func repairMissing(store *storage.Storage, tx *storage.Tx, missing entities.Files, pretend, force bool) error {
+func repairMissing(store *storage.Storage, tx *storage.Tx, missing entities.Files, pretend, force bool, output io.Writer) error {
 	for _, dbFile := range missing {
 		if dbFile == nil {
 			continue
@@ -449,9 +512,9 @@ func repairMissing(store *storage.Storage, tx *storage.Tx, missing entities.File
 				}
 			}
 
-			fmt.Printf("%v: removed\n", dbFile.Path())
+			fmt.Fprintf(output, "%v: removed\n", dbFile.Path())
 		} else {
-			fmt.Printf("%v: missing\n", dbFile.Path())
+			fmt.Fprintf(output, "%v: missing\n", dbFile.Path())
 		}
 	}
 
@@ -482,12 +545,7 @@ func buildPathBySizeMapRecursive(path string, pathBySizeMap map[int64][]string) 
 
 	stat, err := os.Stat(absPath)
 	if err != nil {
-		switch {
-		case os.IsPermission(err):
-			log.Warnf("%v: permission denied", path)
-		default:
-			return err
-		}
+		return fmt.Errorf("%v: could not stat search path: %w", path, err)
 	}
 
 	if stat.IsDir() {

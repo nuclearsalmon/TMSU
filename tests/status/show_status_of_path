@@ -2,34 +2,34 @@
 
 # setup
 
-mkdir -p /tmp/tmsu/dir
-echo 1 >/tmp/tmsu/file1
-echo 2 >/tmp/tmsu/file2
-echo 3 >/tmp/tmsu/file3
-echo 4 >/tmp/tmsu/dir/file4
-tmsu tag /tmp/tmsu/file1 aubergine    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file2 aubergine    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file3 aubergine    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/dir aubergine      >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-rm /tmp/tmsu/file2
-echo changed >>/tmp/tmsu/file3
+mkdir -p ${TEST_DIR}/dir
+echo 1 >${TEST_DIR}/file1
+echo 2 >${TEST_DIR}/file2
+echo 3 >${TEST_DIR}/file3
+echo 4 >${TEST_DIR}/dir/file4
+tmsu tag ${TEST_DIR}/file1 aubergine    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file2 aubergine    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file3 aubergine    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/dir aubergine      >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+rm ${TEST_DIR}/file2
+echo changed >>${TEST_DIR}/file3
 
 # test
 
-tmsu status /tmp/tmsu/dir             >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu status ${TEST_DIR}/dir             >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-T /tmp/tmsu/dir
-U /tmp/tmsu/dir/file4
+diff ${TEST_DIR}/stdout - <<EOF
+T ${TEST_DIR}/dir
+U ${TEST_DIR}/dir/file4
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

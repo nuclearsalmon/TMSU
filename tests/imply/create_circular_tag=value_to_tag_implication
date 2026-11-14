@@ -2,12 +2,12 @@
 
 # test
 
-tmsu imply year=2015 MMXV    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu imply MMXV year=2015    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu imply year=2015 MMXV    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu imply MMXV year=2015    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'year'
 tmsu: new value '2015'
 tmsu: new tag 'MMXV'
@@ -17,7 +17,7 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

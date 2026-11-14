@@ -38,7 +38,7 @@ var ValuesCommand = Command{
 
 // unexported
 
-func valuesExec(options Options, args []string, databasePath string) (error, warnings) {
+func valuesExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	showCount := options.HasOption("--count")
 	onePerLine := options.HasOption("-1")
 
@@ -52,7 +52,7 @@ func valuesExec(options Options, args []string, databasePath string) (error, war
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	if len(args) == 0 {
 		return listAllValues(store, tx, showCount, onePerLine), nil

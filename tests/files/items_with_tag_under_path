@@ -2,25 +2,25 @@
 
 # setup
 
-mkdir /tmp/tmsu/dir1
-touch /tmp/tmsu/{file1,dir1/file1}
+mkdir ${TEST_DIR}/dir1
+touch ${TEST_DIR}/{file1,dir1/file1}
 
-tmsu tag --tags="aubergine" /tmp/tmsu/file1 /tmp/tmsu/dir1/file1    >/dev/null 2>&1
+tmsu tag --tags="aubergine" ${TEST_DIR}/file1 ${TEST_DIR}/dir1/file1    >/dev/null 2>&1
 
 # test
 
-tmsu files --path="/tmp/tmsu/dir1" aubergine                        >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu files --path="${TEST_DIR}/dir1" aubergine                        >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/dir1/file1
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/dir1/file1
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

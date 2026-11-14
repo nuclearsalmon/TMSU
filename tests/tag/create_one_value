@@ -2,18 +2,18 @@
 
 # test
 
-tmsu tag --create "=aubergine"    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu values                       >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tag --create "=aubergine"    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu values                       >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 aubergine
 EOF
 if [[ $? -ne 0 ]]; then

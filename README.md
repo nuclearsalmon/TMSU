@@ -1,3 +1,11 @@
+## About this fork
+
+This is a community fork of [TMSU](https://github.com/oniony/TMSU), maintained for a homelab that uses large tag collections. It fixes repeated-tag traversal in the virtual filesystem, batches tag queries, and handles certain query errors without terminating the VFS. Further fixes may follow.
+
+**These changes were generated with the assistance of a large language model (LLM). This fork is provided as-is, without any guarantees or warranties, express, implied, or otherwise. Use it at your own risk and maintain backups.**
+
+The original project's documentation follows.
+
 ![TMSU](http://tmsu.org/images/tmsu.png)
 
 [![Build Status](https://travis-ci.org/oniony/TMSU.svg?branch=master)](https://travis-ci.org/oniony/TMSU)

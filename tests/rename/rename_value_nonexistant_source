@@ -2,18 +2,18 @@
 
 # test
 
-tmsu rename --value 2015 2016    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu rename --value 2015 2016    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: no such value '2015'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - </dev/null
+diff ${TEST_DIR}/stdout - </dev/null
 if [[ $? -ne 0 ]]; then
     exit 1
 fi

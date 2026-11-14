@@ -34,7 +34,7 @@ var MergeCommand = Command{
 
 // unexported
 
-func mergeExec(options Options, args []string, databasePath string) (error, warnings) {
+func mergeExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	if len(args) < 2 {
 		return fmt.Errorf("too few arguments"), nil
 	}
@@ -49,7 +49,7 @@ func mergeExec(options Options, args []string, databasePath string) (error, warn
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	sourceNames := make([]string, len(args)-1)
 	for index, name := range args[:len(args)-1] {

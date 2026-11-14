@@ -2,17 +2,17 @@
 
 # setup
 
-touch /tmp/tmsu/file1
-tmsu tag /tmp/tmsu/file1 aubergine      >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu imply aubergine vegetable          >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+touch ${TEST_DIR}/file1
+tmsu tag ${TEST_DIR}/file1 aubergine      >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu imply aubergine vegetable          >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # test
 
-tmsu tags --explicit /tmp/tmsu/file1    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tags --explicit ${TEST_DIR}/file1    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 tmsu: new tag 'vegetable'
 EOF
@@ -20,8 +20,8 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1: aubergine
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1: aubergine
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

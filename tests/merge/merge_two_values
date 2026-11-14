@@ -2,29 +2,29 @@
 
 # setup
 
-touch /tmp/tmsu/{file1,file2}
-tmsu tag /tmp/tmsu/file1 vegetable=aubergine    >/dev/null 2>&1
-tmsu tag /tmp/tmsu/file2 vegetable=potato       >/dev/null 2>&1
+touch ${TEST_DIR}/{file1,file2}
+tmsu tag ${TEST_DIR}/file1 vegetable=aubergine    >/dev/null 2>&1
+tmsu tag ${TEST_DIR}/file2 vegetable=potato       >/dev/null 2>&1
 
 # test
 
-tmsu merge --value aubergine potato             >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu merge --value aubergine potato             >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-tmsu values                                     >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files vegetable=potato                     >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu values                                     >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files vegetable=potato                     >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 potato
-/tmp/tmsu/file1
-/tmp/tmsu/file2
+${TEST_DIR}/file1
+${TEST_DIR}/file2
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

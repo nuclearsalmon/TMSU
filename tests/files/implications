@@ -2,7 +2,7 @@
 
 # setup
 
-touch /tmp/tmsu/file{1..4}
+touch ${TEST_DIR}/file{1..4}
 
 tmsu imply a b                          >/dev/null 2>&1
 tmsu imply b c                          >/dev/null 2>&1
@@ -11,129 +11,129 @@ tmsu imply k l                          >/dev/null 2>&1
 tmsu imply x y=2                        >/dev/null 2>&1
 tmsu imply y z                          >/dev/null 2>&1
 
-tmsu tag /tmp/tmsu/file1 a              >/dev/null 2>&1
-tmsu tag /tmp/tmsu/file2 j=1            >/dev/null 2>&1
-tmsu tag /tmp/tmsu/file3 x              >/dev/null 2>&1
-tmsu tag /tmp/tmsu/file4 j=2            >/dev/null 2>&1
+tmsu tag ${TEST_DIR}/file1 a              >/dev/null 2>&1
+tmsu tag ${TEST_DIR}/file2 j=1            >/dev/null 2>&1
+tmsu tag ${TEST_DIR}/file3 x              >/dev/null 2>&1
+tmsu tag ${TEST_DIR}/file4 j=2            >/dev/null 2>&1
 
 # test
 
-tmsu files a                            >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu files b                            >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files c                            >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files a b c                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-echo ---                                >>/tmp/tmsu/stdout
+tmsu files a                            >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu files b                            >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files c                            >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files a b c                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+echo ---                                >>${TEST_DIR}/stdout
 
-tmsu files j=1                          >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files k                            >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files l                            >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files j=1 k l                      >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-echo ---                                >>/tmp/tmsu/stdout
+tmsu files j=1                          >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files k                            >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files l                            >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files j=1 k l                      >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+echo ---                                >>${TEST_DIR}/stdout
 
-tmsu files x                            >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files y=2                          >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files z                            >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files x y=2 z                      >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-echo ---                                >>/tmp/tmsu/stdout
+tmsu files x                            >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files y=2                          >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files z                            >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files x y=2 z                      >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+echo ---                                >>${TEST_DIR}/stdout
 
-tmsu files j=2                          >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-echo ---                                >>/tmp/tmsu/stdout
+tmsu files j=2                          >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+echo ---                                >>${TEST_DIR}/stdout
 
-tmsu files not a                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files not b                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files not c                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-echo ---                                >>/tmp/tmsu/stdout
+tmsu files not a                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files not b                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files not c                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+echo ---                                >>${TEST_DIR}/stdout
 
-tmsu files not j                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files not j=1                      >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files not k                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files not l                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-echo ---                                >>/tmp/tmsu/stdout
+tmsu files not j                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files not j=1                      >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files not k                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files not l                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+echo ---                                >>${TEST_DIR}/stdout
 
-tmsu files not x                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files not y                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files not y=2                      >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu files not z                        >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-echo ---                                >>/tmp/tmsu/stdout
+tmsu files not x                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files not y                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files not y=2                      >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu files not z                        >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+echo ---                                >>${TEST_DIR}/stdout
 
-tmsu tags /tmp/tmsu/file1               >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/file1    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags /tmp/tmsu/file2               >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/file2    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags /tmp/tmsu/file3               >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/file3    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags /tmp/tmsu/file4               >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/file4    >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tags ${TEST_DIR}/file1               >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/file1    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags ${TEST_DIR}/file2               >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/file2    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags ${TEST_DIR}/file3               >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/file3    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags ${TEST_DIR}/file4               >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/file4    >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1
-/tmp/tmsu/file1
-/tmp/tmsu/file1
-/tmp/tmsu/file1
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1
+${TEST_DIR}/file1
+${TEST_DIR}/file1
+${TEST_DIR}/file1
 ---
-/tmp/tmsu/file2
-/tmp/tmsu/file2
-/tmp/tmsu/file2
-/tmp/tmsu/file2
+${TEST_DIR}/file2
+${TEST_DIR}/file2
+${TEST_DIR}/file2
+${TEST_DIR}/file2
 ---
-/tmp/tmsu/file3
-/tmp/tmsu/file3
-/tmp/tmsu/file3
-/tmp/tmsu/file3
+${TEST_DIR}/file3
+${TEST_DIR}/file3
+${TEST_DIR}/file3
+${TEST_DIR}/file3
 ---
-/tmp/tmsu/file4
+${TEST_DIR}/file4
 ---
-/tmp/tmsu/file2
-/tmp/tmsu/file3
-/tmp/tmsu/file4
-/tmp/tmsu/file2
-/tmp/tmsu/file3
-/tmp/tmsu/file4
-/tmp/tmsu/file2
-/tmp/tmsu/file3
-/tmp/tmsu/file4
+${TEST_DIR}/file2
+${TEST_DIR}/file3
+${TEST_DIR}/file4
+${TEST_DIR}/file2
+${TEST_DIR}/file3
+${TEST_DIR}/file4
+${TEST_DIR}/file2
+${TEST_DIR}/file3
+${TEST_DIR}/file4
 ---
-/tmp/tmsu/file1
-/tmp/tmsu/file3
-/tmp/tmsu/file1
-/tmp/tmsu/file3
-/tmp/tmsu/file4
-/tmp/tmsu/file1
-/tmp/tmsu/file3
-/tmp/tmsu/file4
-/tmp/tmsu/file1
-/tmp/tmsu/file3
-/tmp/tmsu/file4
+${TEST_DIR}/file1
+${TEST_DIR}/file3
+${TEST_DIR}/file1
+${TEST_DIR}/file3
+${TEST_DIR}/file4
+${TEST_DIR}/file1
+${TEST_DIR}/file3
+${TEST_DIR}/file4
+${TEST_DIR}/file1
+${TEST_DIR}/file3
+${TEST_DIR}/file4
 ---
-/tmp/tmsu/file1
-/tmp/tmsu/file2
-/tmp/tmsu/file4
-/tmp/tmsu/file1
-/tmp/tmsu/file2
-/tmp/tmsu/file4
-/tmp/tmsu/file1
-/tmp/tmsu/file2
-/tmp/tmsu/file4
-/tmp/tmsu/file1
-/tmp/tmsu/file2
-/tmp/tmsu/file4
+${TEST_DIR}/file1
+${TEST_DIR}/file2
+${TEST_DIR}/file4
+${TEST_DIR}/file1
+${TEST_DIR}/file2
+${TEST_DIR}/file4
+${TEST_DIR}/file1
+${TEST_DIR}/file2
+${TEST_DIR}/file4
+${TEST_DIR}/file1
+${TEST_DIR}/file2
+${TEST_DIR}/file4
 ---
-/tmp/tmsu/file1: a b c
-/tmp/tmsu/file1: a
-/tmp/tmsu/file2: j=1 k l
-/tmp/tmsu/file2: j=1
-/tmp/tmsu/file3: x y=2 z
-/tmp/tmsu/file3: x
-/tmp/tmsu/file4: j=2
-/tmp/tmsu/file4: j=2
+${TEST_DIR}/file1: a b c
+${TEST_DIR}/file1: a
+${TEST_DIR}/file2: j=1 k l
+${TEST_DIR}/file2: j=1
+${TEST_DIR}/file3: x y=2 z
+${TEST_DIR}/file3: x
+${TEST_DIR}/file4: j=2
+${TEST_DIR}/file4: j=2
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

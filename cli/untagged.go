@@ -41,7 +41,7 @@ Where PATHs are not specified, untagged items under the current working director
 
 // unexported
 
-func untaggedExec(options Options, args []string, databasePath string) (error, warnings) {
+func untaggedExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	recursive := !options.HasOption("--directory")
 	count := options.HasOption("--count")
 	followSymlinks := !options.HasOption("--no-dereference")
@@ -65,7 +65,7 @@ func untaggedExec(options Options, args []string, databasePath string) (error, w
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	if count {
 		count, err := findUntaggedCount(store, tx, paths, recursive, followSymlinks)

@@ -2,16 +2,16 @@
 
 # setup
 
-touch /tmp/tmsu/file1
-tmsu tag /tmp/tmsu/file1 vegetable=brocolli year=2015 year=2016 'year=MMXXII\=2022'  >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+touch ${TEST_DIR}/file1
+tmsu tag ${TEST_DIR}/file1 vegetable=brocolli year=2015 year=2016 'year=MMXXII\=2022'  >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # test
 
-tmsu values year                                                                     >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu values year                                                                     >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'vegetable'
 tmsu: new value 'brocolli'
 tmsu: new tag 'year'
@@ -23,7 +23,7 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 2015
 2016
 MMXXII=2022

@@ -91,7 +91,7 @@ func NewReport() *StatusReport {
 
 // unexported
 
-func statusExec(options Options, args []string, databasePath string) (error, warnings) {
+func statusExec(options Options, args []string, databasePath string) (resultErr error, resultWarnings warnings) {
 	dirOnly := options.HasOption("--directory")
 	followSymlinks := !options.HasOption("--no-dereference")
 
@@ -105,7 +105,7 @@ func statusExec(options Options, args []string, databasePath string) (error, war
 	if err != nil {
 		return err, nil
 	}
-	defer tx.Commit()
+	defer finishTransaction(tx, &resultErr)
 
 	var report *StatusReport
 

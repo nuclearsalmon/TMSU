@@ -2,35 +2,35 @@
 
 # setup
 
-touch /tmp/tmsu/file1
+touch ${TEST_DIR}/file1
 
 # test
 
-tmsu tag /tmp/tmsu/file1 .               >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 ..              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 and             >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 or              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 not             >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 eq              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 ne              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 lt              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 gt              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 le              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 ge              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 AND             >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 OR              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 NOT             >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 EQ              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 NE              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 LT              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 GT              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 LE              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tag /tmp/tmsu/file1 GE              >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
-tmsu tags --explicit /tmp/tmsu/file1     >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu tag ${TEST_DIR}/file1 .               >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 ..              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 and             >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 or              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 not             >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 eq              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 ne              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 lt              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 gt              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 le              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 ge              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 AND             >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 OR              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 NOT             >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 EQ              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 NE              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 LT              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 GT              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 LE              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tag ${TEST_DIR}/file1 GE              >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
+tmsu tags --explicit ${TEST_DIR}/file1     >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: tag name cannot be '.' or '..'
 tmsu: tag name cannot be '.' or '..'
 tmsu: tag name cannot be a logical operator: 'and', 'or' or 'not'
@@ -56,8 +56,8 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1:
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1:
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

@@ -2,17 +2,17 @@
 
 # test
 
-tmsu config autoCreateTags=no    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
-tmsu config autoCreateTags       >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu config autoCreateTags=no    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
+tmsu config autoCreateTags       >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - </dev/null
+diff ${TEST_DIR}/stderr - </dev/null
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<<no
+diff ${TEST_DIR}/stdout - <<<no
 if [[ $? -ne 0 ]]; then
     exit 1
 fi

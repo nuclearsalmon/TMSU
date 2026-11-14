@@ -2,25 +2,25 @@
 
 # setup
 
-echo dupe >/tmp/tmsu/file1
-cp /tmp/tmsu/file1 /tmp/tmsu/file2
-tmsu tag --tags="aubergine" /tmp/tmsu/file1    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+echo dupe >${TEST_DIR}/file1
+cp ${TEST_DIR}/file1 ${TEST_DIR}/file2
+tmsu tag --tags="aubergine" ${TEST_DIR}/file1    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # test
 
-tmsu dupes /tmp/tmsu/file2                     >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu dupes ${TEST_DIR}/file2                     >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: new tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
-/tmp/tmsu/file1
+diff ${TEST_DIR}/stdout - <<EOF
+${TEST_DIR}/file1
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

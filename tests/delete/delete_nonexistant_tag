@@ -2,18 +2,18 @@
 
 # test
 
-tmsu delete aubergine    >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu delete aubergine    >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: no such tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - </dev/null
+diff ${TEST_DIR}/stdout - </dev/null
 if [[ $? -ne 0 ]]; then
     exit 1
 fi

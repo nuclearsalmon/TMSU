@@ -16,11 +16,14 @@
 package database
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	_ "github.com/mattn/go-sqlite3" // initialised Sqlite3
 	"github.com/oniony/TMSU/common/log"
+	"net/url"
 	"os"
+	"path/filepath"
 )
 
 type Database struct {
@@ -41,6 +44,7 @@ func CreateAt(path string) error {
 		return DatabaseTransactionError{path, err}
 	}
 
+	defer tx.Rollback()
 	if err := upgrade(tx); err != nil {
 		return err
 	}
@@ -72,18 +76,41 @@ func OpenAt(path string) (*Database, error) {
 
 	tx, err := db.Begin()
 	if err != nil {
+		db.Close()
 		return nil, DatabaseTransactionError{path, err}
 	}
 
 	if err := upgrade(tx); err != nil {
+		tx.Rollback()
+		db.Close()
 		return nil, err
 	}
 
 	if err := tx.Commit(); err != nil {
+		db.Close()
 		return nil, DatabaseTransactionError{path, err}
 	}
 
 	return &Database{db}, nil
+}
+
+// SnapshotAt copies a consistent SQLite snapshot without upgrading the source.
+func SnapshotAt(path, destination string) error {
+	if _, err := os.Stat(path); err != nil {
+		return err
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(absPath), RawQuery: "mode=ro"}
+	db, err := sql.Open("sqlite3", u.String())
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	_, err = db.Exec("VACUUM INTO ?", destination)
+	return err
 }
 
 func (database *Database) Close() error {
@@ -91,30 +118,39 @@ func (database *Database) Close() error {
 }
 
 func (database *Database) Begin() (*Tx, error) {
-	tx, err := database.db.Begin()
+	return database.BeginContext(context.Background())
+}
+
+func (database *Database) BeginContext(ctx context.Context) (*Tx, error) {
+	tx, err := database.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Tx{tx}, nil
+	return &Tx{tx, ctx}, nil
 }
 
 type Tx struct {
-	tx *sql.Tx
+	tx  *sql.Tx
+	ctx context.Context
 }
 
 func (tx *Tx) Exec(query string, args ...interface{}) (sql.Result, error) {
 	log.Info(3, query)
 	log.Infof(3, "params: %v", args)
 
-	return tx.tx.Exec(query, args...)
+	return tx.tx.ExecContext(tx.ctx, query, args...)
 }
 
 func (tx *Tx) Query(query string, args ...interface{}) (*sql.Rows, error) {
 	log.Info(3, query)
 	log.Infof(3, "params: %v", args)
 
-	return tx.tx.Query(query, args...)
+	return tx.tx.QueryContext(tx.ctx, query, args...)
+}
+
+func (tx *Tx) Err() error {
+	return tx.ctx.Err()
 }
 
 func (tx *Tx) Commit() error {
@@ -133,10 +169,10 @@ func (tx *Tx) Rollback() error {
 
 func readCount(rows *sql.Rows) (uint, error) {
 	if !rows.Next() {
+		if err := rows.Err(); err != nil {
+			return 0, err
+		}
 		return 0, errors.New("could not get count")
-	}
-	if rows.Err() != nil {
-		return 0, rows.Err()
 	}
 
 	var count uint

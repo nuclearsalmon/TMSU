@@ -6,20 +6,20 @@ tmsu tag --create aubergine    >/dev/null 2>&1
 
 # test
 
-tmsu delete aubergine          >|/tmp/tmsu/stdout 2>|/tmp/tmsu/stderr
+tmsu delete aubergine          >|${TEST_DIR}/stdout 2>|${TEST_DIR}/stderr
 
 # verify
 
-tmsu files aubergine           >>/tmp/tmsu/stdout 2>>/tmp/tmsu/stderr
+tmsu files aubergine           >>${TEST_DIR}/stdout 2>>${TEST_DIR}/stderr
 
-diff /tmp/tmsu/stderr - <<EOF
+diff ${TEST_DIR}/stderr - <<EOF
 tmsu: no such tag 'aubergine'
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-diff /tmp/tmsu/stdout - <<EOF
+diff ${TEST_DIR}/stdout - <<EOF
 EOF
 if [[ $? -ne 0 ]]; then
     exit 1

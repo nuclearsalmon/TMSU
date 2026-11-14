@@ -217,10 +217,6 @@ ORDER BY fingerprint, directory || '/' || name`
 	var previousFingerprint fingerprint.Fingerprint
 
 	for rows.Next() {
-		if rows.Err() != nil {
-			return nil, err
-		}
-
 		var fileId entities.FileId
 		var directory, name, fp string
 		var modTime time.Time
@@ -249,6 +245,9 @@ ORDER BY fingerprint, directory || '/' || name`
 		fileSets = append(fileSets, fileSet)
 	}
 
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
 	return fileSets, nil
 }
 
@@ -356,9 +355,6 @@ AND (SELECT count(1)
 
 func readFile(rows *sql.Rows) (*entities.File, error) {
 	if !rows.Next() {
-		return nil, nil
-	}
-	if rows.Err() != nil {
 		return nil, rows.Err()
 	}
 
@@ -462,7 +458,7 @@ id IN (SELECT file_id
                        WHERE name` + collation + ` = `)
 		builder.AppendParam(expression.Name)
 		builder.AppendSql(`
-                       UNION ALL
+                       UNION
                        SELECT b.tag_id, b.value_id
                        FROM implication b, working
                        WHERE b.implied_tag_id = working.tag_id AND
@@ -520,7 +516,7 @@ id IN (WITH RECURSIVE impft (tag_id, value_id) AS
 		builder.AppendSql("AND " + valueTerm + collation + " " + expression.Operator + " ")
 		builder.AppendParam(expression.Value.Name)
 		builder.AppendSql(`
-           UNION ALL
+           UNION
            SELECT b.tag_id, b.value_id
            FROM implication b, impft
            WHERE b.implied_tag_id = impft.tag_id AND
