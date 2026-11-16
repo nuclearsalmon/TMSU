@@ -545,6 +545,11 @@ func buildPathBySizeMapRecursive(path string, pathBySizeMap map[int64][]string) 
 
 	stat, err := os.Stat(absPath)
 	if err != nil {
+		if os.IsNotExist(err) {
+			if info, lerr := os.Lstat(absPath); lerr == nil && info.Mode()&os.ModeSymlink != 0 {
+				return nil
+			}
+		}
 		return fmt.Errorf("%v: could not stat search path: %w", path, err)
 	}
 

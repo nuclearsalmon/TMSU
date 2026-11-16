@@ -83,6 +83,21 @@ func TestBuildPathBySizeMapRejectsIncompleteSearch(t *testing.T) {
 	}
 }
 
+func TestBuildPathBySizeMapSkipsDanglingSymlink(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, "dangling")
+	if err := os.Symlink(filepath.Join(dir, "missing"), link); err != nil {
+		t.Skipf("could not create symlink: %v", err)
+	}
+	paths := make(map[int64][]string)
+	if err := buildPathBySizeMapRecursive(dir, paths); err != nil {
+		t.Fatal(err)
+	}
+	if len(paths) != 0 {
+		t.Fatalf("expected dangling symlink to be skipped, got %v", paths)
+	}
+}
+
 func TestRepairMovedPretendReservesCandidates(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "db")
