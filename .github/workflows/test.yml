@@ -4,6 +4,8 @@ on:
   push:
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: '31 4 * * 1'
 
 permissions:
   contents: read
@@ -18,10 +20,43 @@ jobs:
           go-version: '1.23.x'
           cache: true
       - name: Runner regression tests
-        run: bash tests/runner_regression.sh
+        run: bash tests/runner_regression.sh && bash tests/runner_regression.sh
       - name: Go tests
-        run: go test ./...
+        run: go test -count=2 ./...
+      - name: Concurrent Go suite runs
+        shell: bash
+        run: |
+          status=0
+          go test ./... &
+          first=$!
+          go test ./... &
+          second=$!
+          wait "$first" || status=$?
+          wait "$second" || status=$?
+          exit "$status"
+      - name: Go race tests
+        run: go test -race ./...
+      - name: Go formatting
+        run: test -z "$(gofmt -l $(git ls-files '*.go'))"
       - name: Build integration test binary
         run: mkdir -p "$RUNNER_TEMP/tmsu-bin" && go build -o "$RUNNER_TEMP/tmsu-bin/tmsu" .
       - name: Integration tests
         run: TMSU_BIN_DIR="$RUNNER_TEMP/tmsu-bin" tests/runall
+
+  benchmark:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          cache: true
+      - name: Run informational benchmarks
+        run: go test ./benchmark ./vfs -run '^$' -bench '^(BenchmarkTraversalNames|BenchmarkVFSListingsAndWalk)$' -benchmem -benchtime=500ms -count=3 > "$RUNNER_TEMP/tmsu-benchmarks.txt" 2>&1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tmsu-benchmarks-${{ github.sha }}
+          path: ${{ runner.temp }}/tmsu-benchmarks.txt
+          if-no-files-found: error
+          retention-days: 30
