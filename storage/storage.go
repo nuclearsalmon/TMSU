@@ -41,11 +41,25 @@ func OpenAt(path string) (*Storage, error) {
 
 	rootPath, err := determineRootPath(path)
 	if err != nil {
+		db.Close()
 		return nil, err
 	}
 
 	log.Infof(2, "files are stored relative to root path '%v'", rootPath)
 
+	return &Storage{db, path, rootPath}, nil
+}
+
+func OpenReadOnlyAt(path string) (*Storage, error) {
+	db, err := database.OpenReadOnlyAt(path)
+	if err != nil {
+		return nil, err
+	}
+	rootPath, err := determineRootPath(path)
+	if err != nil {
+		db.Close()
+		return nil, err
+	}
 	return &Storage{db, path, rootPath}, nil
 }
 

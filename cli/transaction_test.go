@@ -3,6 +3,7 @@ package cli
 import (
 	"database/sql"
 	"errors"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -140,5 +141,43 @@ func TestDeleteCommitsWithWarnings(t *testing.T) {
 	tag, err := store.TagByName(tx, "present")
 	if err != nil || tag != nil {
 		t.Fatalf("tag=%v error=%v", tag, err)
+	}
+}
+
+func TestTagStorageFailureRollsBackFileAndTag(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "db")
+	if err := storage.CreateAt(path); err != nil {
+		t.Fatal(err)
+	}
+	db, err := sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TRIGGER fail_file_tag BEFORE INSERT ON file_tag BEGIN SELECT RAISE(ABORT, 'injected'); END"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	filePath := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(filePath, []byte("data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err, _ := tagExec(nil, []string{filePath, "rollback_tag"}, path); err == nil {
+		t.Fatal("expected injected tag failure")
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Fatalf("failed tag command changed the physical file: %v", err)
+	}
+	db, err = sql.Open("sqlite3", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	for _, query := range []string{"SELECT count(*) FROM tag WHERE name='rollback_tag'", "SELECT count(*) FROM file"} {
+		var count int
+		if err := db.QueryRow(query).Scan(&count); err != nil || count != 0 {
+			t.Fatalf("failed tag command persisted data: query=%q count=%d error=%v", query, count, err)
+		}
 	}
 }

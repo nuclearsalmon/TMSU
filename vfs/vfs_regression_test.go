@@ -5,13 +5,44 @@ package vfs
 import (
 	"database/sql"
 	"fmt"
+	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/hanwen/go-fuse/fuse"
+	"github.com/oniony/TMSU/entities"
 	"github.com/oniony/TMSU/storage"
 )
+
+func TestPortableNameEscaping(t *testing.T) {
+	names := []string{
+		"ai:something", "slash/name", `back\\slash`, "literal\u200B\u2236",
+		`*?"<>|`, "trailing. ", "CON", "con.txt", "COM1", "LPT³", "control\u0001",
+	}
+	for _, name := range names {
+		escaped := escape(name)
+		if got := unescape(escaped); got != name {
+			t.Errorf("round trip %q: got %q", name, got)
+		}
+		if strings.ContainsAny(escaped, `/\\:*?"<>|`) || strings.HasSuffix(escaped, ".") || strings.HasSuffix(escaped, " ") {
+			t.Errorf("escaped name is not portable: %q -> %q", name, escaped)
+		}
+	}
+	tagNames := []string{"files", "Files", "README.md", "=value", "CON", "LPT³", "ai:something", "ai\u2236something"}
+	seen := make(map[string]string)
+	for _, name := range tagNames {
+		escaped := escapeTag(name)
+		if got := unescapeTag(escaped); got != name {
+			t.Errorf("tag round trip %q: got %q", name, got)
+		}
+		if previous, ok := seen[escaped]; ok {
+			t.Errorf("%q and %q collide as %q", previous, name, escaped)
+		}
+		seen[escaped] = name
+	}
+}
 
 func TestVFSBrowsingAndQueryErrors(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "db")
@@ -188,12 +219,324 @@ func TestVFSUnlinkPathMembership(t *testing.T) {
 	if got := v.Unlink("tags/implied/b/=red/files/example.1.txt", nil); got != fuse.OK {
 		t.Fatalf("unlink valued tag through implied parent: %v", got)
 	}
+	if got := v.Rename("tags/implied/files/example.1.txt", "tags/absent/files/example.1.txt", nil); got != fuse.EPERM {
+		t.Fatalf("move implied association: %v", got)
+	}
 	var count int
 	if err := db.QueryRow("SELECT count(*) FROM file_tag WHERE file_id=1 AND tag_id=2").Scan(&count); err != nil || count != 0 {
 		t.Fatalf("valued tag remains: count=%d err=%v", count, err)
 	}
 	if got := v.Unlink("tags/a/files/example.1.txt", nil); got != fuse.OK {
 		t.Fatalf("unlink explicit tag: %v", got)
+	}
+}
+
+func TestVFSLinkRenameAndUnlinkRetainFile(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, ".tmsu", "db")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.CreateAt(dbPath); err != nil {
+		t.Fatal(err)
+	}
+	filePath := filepath.Join(dir, "example.txt")
+	if err := os.WriteFile(filePath, []byte("retained"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.OpenAt(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	tx, err := store.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tagA, err := store.AddTag(tx, "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tagB, err := store.AddTag(tx, "b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tagC, err := store.AddTag(tx, "c")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := store.AddFile(tx, filePath, "", info.ModTime(), info.Size(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddFileTag(tx, file.Id, tagA.Id, 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	v := FuseVfs{store: store}
+	linkName := v.getLinkName(file)
+	assertFileTag := func(tagId entities.TagId, want bool) {
+		t.Helper()
+		tx, err := store.Begin()
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tx.Rollback()
+		got, err := store.FileTagExists(tx, file.Id, tagId, 0, true)
+		if err != nil || got != want {
+			t.Fatalf("tag %v: got %v, want %v (error %v)", tagId, got, want, err)
+		}
+	}
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TRIGGER fail_file_tag BEFORE INSERT ON file_tag BEGIN SELECT RAISE(ABORT, 'injected'); END"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if status := v.Link("tags/a/files/"+linkName, "tags/b/files/"+linkName, nil); status != fuse.EIO {
+		t.Fatalf("failed Link: %v", status)
+	}
+	assertFileTag(tagA.Id, true)
+	assertFileTag(tagB.Id, false)
+	db, err = sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("DROP TRIGGER fail_file_tag"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if status := v.Link("tags/a/files/"+linkName, "tags/b/files/"+linkName, nil); status != fuse.OK {
+		t.Fatalf("Link: %v", status)
+	}
+	assertFileTag(tagA.Id, true)
+	assertFileTag(tagB.Id, true)
+	db, err = sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("CREATE TRIGGER fail_file_tag_delete BEFORE DELETE ON file_tag BEGIN SELECT RAISE(ABORT, 'injected'); END"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if status := v.Rename("tags/a/files/"+linkName, "tags/c/files/"+linkName, nil); status != fuse.EIO {
+		t.Fatalf("failed Rename: %v", status)
+	}
+	assertFileTag(tagA.Id, true)
+	assertFileTag(tagC.Id, false)
+	db, err = sql.Open("sqlite3", dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.Exec("DROP TRIGGER fail_file_tag_delete"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if status := v.Rename("tags/a/files/"+linkName, "tags/c/files/"+linkName, nil); status != fuse.OK {
+		t.Fatalf("Rename: %v", status)
+	}
+	assertFileTag(tagA.Id, false)
+	assertFileTag(tagB.Id, true)
+	assertFileTag(tagC.Id, true)
+	if status := v.Unlink("tags/c/files/"+linkName, nil); status != fuse.OK {
+		t.Fatalf("Unlink: %v", status)
+	}
+	assertFileTag(tagC.Id, false)
+	assertFileTag(tagB.Id, true)
+	if status := v.Unlink("tags/b/files/"+linkName, nil); status != fuse.OK {
+		t.Fatalf("final Unlink: %v", status)
+	}
+	if _, err := os.Stat(filePath); err != nil {
+		t.Fatalf("physical file was removed: %v", err)
+	}
+	tx, err = store.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	count, err := store.FileCount(tx)
+	tx.Rollback()
+	if err != nil || count != 0 {
+		t.Fatalf("untagged file remains in the database: count=%d error=%v", count, err)
+	}
+}
+
+func TestVFSMalformedPathsAndLinkMembership(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, ".tmsu", "db")
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := storage.CreateAt(dbPath); err != nil {
+		t.Fatal(err)
+	}
+	filePath := filepath.Join(dir, "example.txt")
+	if err := os.WriteFile(filePath, []byte("data"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store, err := storage.OpenAt(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	tx, err := store.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tag, err := store.AddTag(tx, "a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddTag(tx, "other"); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"files", "README.md", "=leading", "ai:something", "ai\u2236", "CON", "LPT³"} {
+		if _, err := store.AddTag(tx, name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	valueTag, err := store.AddTag(tx, "value")
+	if err != nil {
+		t.Fatal(err)
+	}
+	value, err := store.AddValue(tx, "a:b")
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherValue, err := store.AddValue(tx, "x:y")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deviceValue, err := store.AddValue(tx, "CON")
+	if err != nil {
+		t.Fatal(err)
+	}
+	file, err := store.AddFile(tx, filePath, "", info.ModTime(), info.Size(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddFileTag(tx, file.Id, tag.Id, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddFileTag(tx, file.Id, valueTag.Id, value.Id); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.AddFileTag(tx, file.Id, valueTag.Id, deviceValue.Id); err != nil {
+		t.Fatal(err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	v := FuseVfs{store: store, mountPath: filepath.Join(dir, "mount")}
+	linkName := v.getLinkName(file)
+	entries, status := v.OpenDir(tagsDir, nil)
+	if status != fuse.OK {
+		t.Fatalf("OpenDir(tags): %v", status)
+	}
+	listedTags := make(map[string]bool)
+	for _, entry := range entries {
+		listedTags[entry.Name] = true
+	}
+	for _, name := range []string{"files", "README.md", "=leading", "ai:something", "ai\u2236", "CON", "LPT³"} {
+		if !listedTags[escapeTag(name)] {
+			t.Errorf("tag %q listed without its escaped name", name)
+		}
+		if _, status := v.OpenDir("tags/"+escapeTag(name), nil); status != fuse.OK {
+			t.Errorf("OpenDir for tag %q: %v", name, status)
+		}
+	}
+	if _, status := v.OpenDir("tags/CON", nil); status != fuse.ENOENT {
+		t.Fatalf("unescaped device tag path: %v", status)
+	}
+	if status := v.Link("tags/a/files/"+linkName, "tags/value/="+escape("x:y")+"/files/"+linkName, nil); status != fuse.OK {
+		t.Fatalf("Link valued association: %v", status)
+	}
+	tx, err = store.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	retainedTag, retainedErr := store.FileTagExists(tx, file.Id, tag.Id, 0, true)
+	addedValue, valueErr := store.FileTagExists(tx, file.Id, valueTag.Id, otherValue.Id, true)
+	tx.Rollback()
+	if retainedErr != nil || valueErr != nil || !retainedTag || !addedValue {
+		t.Fatalf("Link changed source tags or missed destination value: tag=%v value=%v errors=(%v,%v)", retainedTag, addedValue, retainedErr, valueErr)
+	}
+	valueEntries, status := v.OpenDir("tags/value", nil)
+	if status != fuse.OK {
+		t.Fatalf("OpenDir(value): %v", status)
+	}
+	listedValue := false
+	listedDeviceValue := false
+	for _, entry := range valueEntries {
+		if entry.Name == "="+escape("a:b") {
+			listedValue = true
+		}
+		if entry.Name == "="+escape("CON") {
+			listedDeviceValue = true
+		}
+	}
+	if !listedValue {
+		t.Fatal("colon value was not listed with its escaped name")
+	}
+	if !listedDeviceValue {
+		t.Fatal("device-name value was not listed with its escaped name")
+	}
+	if _, status := v.OpenDir("tags/value/="+escape("CON")+"/files", nil); status != fuse.OK {
+		t.Fatalf("escaped device value path: %v", status)
+	}
+	if _, status := v.OpenDir("tags/value/=CON/files", nil); status != fuse.ENOENT {
+		t.Fatalf("unescaped device value path: %v", status)
+	}
+	oldValuedPath := "tags/value/=" + escape("a:b") + "/files/" + linkName
+	newValuedPath := "tags/value/=" + escape("x:y") + "/files/" + linkName
+	if status := v.Rename(oldValuedPath, newValuedPath, nil); status != fuse.OK {
+		t.Fatalf("Rename valued association: %v", status)
+	}
+	tx, err = store.Begin()
+	if err != nil {
+		t.Fatal(err)
+	}
+	oldExists, oldErr := store.FileTagExists(tx, file.Id, valueTag.Id, value.Id, true)
+	newExists, newErr := store.FileTagExists(tx, file.Id, valueTag.Id, otherValue.Id, true)
+	tx.Rollback()
+	if oldErr != nil || newErr != nil || oldExists || !newExists {
+		t.Fatalf("valued move old=%v new=%v errors=(%v,%v)", oldExists, newExists, oldErr, newErr)
+	}
+	for _, path := range []string{"tags/", "tags/files", "tags//a", "tags/=orphan", "queries/", "queries/a/extra"} {
+		if _, status := v.OpenDir(path, nil); status == fuse.OK {
+			t.Errorf("OpenDir(%q) unexpectedly succeeded", path)
+		}
+		if _, status := v.GetAttr(path, nil); status == fuse.OK {
+			t.Errorf("GetAttr(%q) unexpectedly succeeded", path)
+		}
+	}
+	if _, status := v.Readlink("tags/other/files/"+linkName, nil); status != fuse.ENOENT {
+		t.Fatalf("Readlink through nonmatching tag: %v", status)
+	}
+	if _, status := v.GetAttr("tags/other/files/"+linkName, nil); status != fuse.ENOENT {
+		t.Fatalf("GetAttr through nonmatching tag: %v", status)
+	}
+	if _, status := v.Readlink("tags/a/files/"+linkName, nil); status != fuse.OK {
+		t.Fatalf("Readlink through matching tag: %v", status)
 	}
 }
 

@@ -202,11 +202,42 @@ func (vfs FuseVfs) GetXAttr(name string, attr string, context *fuse.Context) ([]
 	return nil, fuse.ENOSYS
 }
 
-func (vfs FuseVfs) Link(oldName string, newName string, context *fuse.Context) fuse.Status {
+func (vfs FuseVfs) Link(oldName string, newName string, context *fuse.Context) (status fuse.Status) {
 	log.Infof(2, "BEGIN Link(%v, %v)", oldName, newName)
 	defer log.Infof(2, "END Link(%v, %v)", oldName, newName)
 
-	return fuse.ENOSYS
+	tx, cancel, err := vfs.beginSQL()
+	if err != nil {
+		log.Warnf("could not begin transaction: %v", err)
+		return fuse.EIO
+	}
+	defer cancel()
+	status = fuse.EIO
+	defer func() { status = finishTransaction(tx, status) }()
+
+	oldPath := vfs.splitPath(oldName)
+	newPath := vfs.splitPath(newName)
+	if len(oldPath) < 3 || len(newPath) < 4 || newPath[0] != tagsDir || newPath[len(newPath)-2] != filesDir || oldPath[len(oldPath)-1] != newPath[len(newPath)-1] {
+		return fuse.EPERM
+	}
+	file, status := vfs.taggedFile(tx, oldPath)
+	if status != fuse.OK {
+		return status
+	}
+	selections, status := vfs.resolveTagAssociations(tx, newPath[1:len(newPath)-2])
+	if status != fuse.OK {
+		return status
+	}
+	for _, selection := range selections {
+		if _, err := vfs.store.AddFileTag(tx, file.Id, selection.tagId, selection.valueId); err != nil {
+			log.Warnf("could not copy file tag: %v", err)
+			return fuse.EIO
+		}
+	}
+	if _, status := vfs.taggedFile(tx, newPath); status != fuse.OK {
+		return status
+	}
+	return fuse.OK
 }
 
 func (vfs FuseVfs) ListXAttr(name string, context *fuse.Context) ([]string, fuse.Status) {
@@ -237,7 +268,10 @@ func (vfs FuseVfs) Mkdir(name string, mode uint32, context *fuse.Context) (statu
 
 	switch path[0] {
 	case tagsDir:
-		tagName := unescape(path[1])
+		tagName, valid := tagPathName(path[1])
+		if !valid {
+			return fuse.EINVAL
+		}
 
 		if _, err := vfs.store.AddTag(tx, tagName); err != nil {
 			log.Warnf("could not create tag '%v': %v", tagName, err)
@@ -366,29 +400,90 @@ func (vfs FuseVfs) Rename(oldName string, newName string, context *fuse.Context)
 	oldPath := vfs.splitPath(oldName)
 	newPath := vfs.splitPath(newName)
 
-	if len(oldPath) != 2 || len(newPath) != 2 {
+	if len(oldPath) == 2 && len(newPath) == 2 && oldPath[0] == tagsDir && newPath[0] == tagsDir {
+		oldTagName, valid := tagPathName(oldPath[1])
+		if !valid {
+			return fuse.ENOENT
+		}
+		newTagName, valid := tagPathName(newPath[1])
+		if !valid {
+			return fuse.EINVAL
+		}
+
+		tag, err := vfs.store.TagByName(tx, oldTagName)
+		if err != nil {
+			log.Warnf("could not retrieve tag '%v': %v", oldTagName, err)
+			return fuse.EIO
+		}
+		if tag == nil {
+			return fuse.ENOENT
+		}
+
+		if _, err := vfs.store.RenameTag(tx, tag.Id, newTagName); err != nil {
+			log.Warnf("could not rename tag '%v' to '%v': %v", oldTagName, newTagName, err)
+			return fuse.EIO
+		}
+		return fuse.OK
+	}
+	if len(oldPath) < 4 || len(newPath) < 4 || oldPath[0] != tagsDir || newPath[0] != tagsDir || oldPath[len(oldPath)-2] != filesDir || newPath[len(newPath)-2] != filesDir || oldPath[len(oldPath)-1] != newPath[len(newPath)-1] {
 		return fuse.EPERM
 	}
 
-	if oldPath[0] != tagsDir || newPath[0] != tagsDir {
+	file, status := vfs.taggedFile(tx, oldPath)
+	if status != fuse.OK {
+		return status
+	}
+	source, status := vfs.resolveTagAssociations(tx, oldPath[1:len(oldPath)-2])
+	if status != fuse.OK {
+		return status
+	}
+	if len(source) == 0 {
 		return fuse.EPERM
 	}
-
-	oldTagName := unescape(oldPath[1])
-	newTagName := unescape(newPath[1])
-
-	tag, err := vfs.store.TagByName(tx, oldTagName)
+	destination, status := vfs.resolveTagAssociations(tx, newPath[1:len(newPath)-2])
+	if status != fuse.OK {
+		return status
+	}
+	if len(destination) == 0 {
+		return fuse.EPERM
+	}
+	fileTags, err := vfs.store.FileTagsByFileId(tx, file.Id, false)
 	if err != nil {
-		log.Warnf("could not retrieve tag '%v': %v", oldTagName, err)
+		log.Warnf("could not retrieve file tags: %v", err)
 		return fuse.EIO
 	}
-	if tag == nil {
-		return fuse.ENOENT
+	for _, selection := range source {
+		if hasTagAssociation(destination, selection) {
+			continue
+		}
+		var selected *entities.FileTag
+		for _, fileTag := range fileTags {
+			if fileTag.TagId == selection.tagId && fileTag.ValueId == selection.valueId {
+				selected = fileTag
+				break
+			}
+		}
+		if selected == nil || !selected.Explicit || selected.Implicit {
+			return fuse.EPERM
+		}
 	}
-
-	if _, err := vfs.store.RenameTag(tx, tag.Id, newTagName); err != nil {
-		log.Warnf("could not rename tag '%v' to '%v': %v", oldTagName, newTagName, err)
-		return fuse.EIO
+	for _, selection := range destination {
+		if _, err := vfs.store.AddFileTag(tx, file.Id, selection.tagId, selection.valueId); err != nil {
+			log.Warnf("could not add destination file tag: %v", err)
+			return fuse.EIO
+		}
+	}
+	for _, selection := range source {
+		if hasTagAssociation(destination, selection) {
+			continue
+		}
+		if err := vfs.store.DeleteFileTag(tx, file.Id, selection.tagId, selection.valueId); err != nil {
+			log.Warnf("could not remove source file tag: %v", err)
+			return fuse.EIO
+		}
+	}
+	if _, status := vfs.taggedFile(tx, newPath); status != fuse.OK {
+		return status
 	}
 
 	return fuse.OK
@@ -416,7 +511,10 @@ func (vfs FuseVfs) Rmdir(name string, context *fuse.Context) (status fuse.Status
 			return fuse.EPERM
 		}
 
-		tagName := unescape(path[1])
+		tagName, valid := tagPathName(path[1])
+		if !valid {
+			return fuse.ENOENT
+		}
 		tag, err := vfs.store.TagByName(tx, tagName)
 		if err != nil {
 			log.Warnf("could not retrieve tag '%v': %v", tagName, err)
@@ -540,24 +638,23 @@ func (vfs FuseVfs) Unlink(name string, context *fuse.Context) (status fuse.Statu
 		}
 
 		// Reject paths that cannot be traversed in the tag directory tree.
-		selected := make(map[string]bool)
 		tagPath := path[1 : len(path)-2]
-		for i, element := range tagPath {
-			if element == "" || element == filesDir {
+		selections, valid := parseTagPath(tagPath)
+		if !valid {
+			return fuse.ENOENT
+		}
+		selected := make(map[string]bool)
+		for _, selection := range selections {
+			if selected[selection.tagName] {
 				return fuse.ENOENT
 			}
-			if element[0] == '=' {
-				if i == 0 || tagPath[i-1][0] == '=' || element != "="+escape(unescape(element[1:])) {
-					return fuse.ENOENT
-				}
-			} else {
-				if element != escape(unescape(element)) || selected[element] {
-					return fuse.ENOENT
-				}
-				selected[element] = true
-			}
+			selected[selection.tagName] = true
 		}
-		files, err := vfs.store.FilesForQuery(tx, pathToExpression(tagPath), "", false, false, "name")
+		expression, valid := pathToExpression(tagPath)
+		if !valid {
+			return fuse.ENOENT
+		}
+		files, err := vfs.store.FilesForQuery(tx, expression, "", false, false, "name")
 		if err != nil {
 			log.Warnf("could not query files: %v", err)
 			return fuse.EIO
@@ -576,10 +673,10 @@ func (vfs FuseVfs) Unlink(name string, context *fuse.Context) (status fuse.Statu
 		dirName := path[len(path)-3]
 		var tagName, valueName string
 		if dirName[0] == '=' {
-			tagName = unescape(path[len(path)-4])
+			tagName = unescapeTag(path[len(path)-4])
 			valueName = unescape(dirName[1:])
 		} else {
-			tagName = unescape(dirName)
+			tagName = unescapeTag(dirName)
 			valueName = ""
 		}
 
@@ -712,11 +809,7 @@ func (vfs FuseVfs) tagDirectories(tx *storage.Tx) ([]fuse.DirEntry, fuse.Status)
 
 	entries := make([]fuse.DirEntry, 0, len(tags))
 	for _, tag := range tags {
-		tagName := escape(tag.Name)
-
-		if tagName == filesDir {
-			continue
-		}
+		tagName := escapeTag(tag.Name)
 
 		entries = append(entries, fuse.DirEntry{Name: tagName, Mode: fuse.S_IFDIR})
 	}
@@ -794,6 +887,9 @@ func (vfs FuseVfs) getTaggedEntryAttr(path []string) (result *fuse.Attr, status 
 	log.Infof(2, "BEGIN getTaggedEntryAttr(%v)", path)
 	defer log.Infof(2, "END getTaggedEntryAttr(%v)", path)
 
+	if len(path) == 0 || path[0] == "" {
+		return nil, fuse.ENOENT
+	}
 	if len(path) == 1 && path[0] == helpFilename {
 		now := time.Now()
 		return &fuse.Attr{Mode: fuse.S_IFREG | 0444, Nlink: 1, Size: uint64(len(tagsDirHelp)), Mtime: uint64(now.Unix()), Mtimensec: uint32(now.Nanosecond())}, fuse.OK
@@ -802,20 +898,29 @@ func (vfs FuseVfs) getTaggedEntryAttr(path []string) (result *fuse.Attr, status 
 	name := path[len(path)-1]
 
 	if name == filesDir {
+		if len(path) < 2 {
+			return nil, fuse.ENOENT
+		}
+		tx, cancel, err := vfs.beginSQL()
+		if err != nil {
+			log.Warnf("could not begin transaction: %v", err)
+			return nil, fuse.EIO
+		}
+		defer cancel()
+		status = fuse.EIO
+		defer func() { status = finishTransaction(tx, status) }()
+		if _, status := vfs.resolveTagAssociations(tx, path[:len(path)-1]); status != fuse.OK {
+			return nil, status
+		}
 		return vfs.getFilesAttr(path)
 	}
 
 	fileId := vfs.parseFileId(name)
-	if fileId != 0 {
-		return vfs.getFileEntryAttr(fileId)
+	if fileId != 0 && len(path) >= 2 && path[len(path)-2] == filesDir {
+		return vfs.getFileEntryAttr(append([]string{tagsDir}, path...), fileId)
 	}
-
-	tagNames := make([]string, 0, len(path))
-	for _, pathElement := range path {
-		if pathElement[0] != '=' {
-			tagName := unescape(pathElement)
-			tagNames = append(tagNames, tagName)
-		}
+	if _, valid := pathToExpression(path); !valid {
+		return nil, fuse.ENOENT
 	}
 
 	tx, cancel, err := vfs.beginSQL()
@@ -827,13 +932,8 @@ func (vfs FuseVfs) getTaggedEntryAttr(path []string) (result *fuse.Attr, status 
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
-	tagIds, err := vfs.tagNamesToIds(tx, tagNames)
-	if err != nil {
-		log.Warnf("could not lookup tag IDs: %v.", err)
-		return nil, fuse.EIO
-	}
-	if tagIds == nil {
-		return nil, fuse.ENOENT
+	if _, status := vfs.resolveTagAssociations(tx, path); status != fuse.OK {
+		return nil, status
 	}
 
 	now := time.Now()
@@ -844,6 +944,9 @@ func (vfs FuseVfs) getQueryEntryAttr(path []string) (result *fuse.Attr, status f
 	log.Infof(2, "BEGIN getQueryEntryAttr(%v)", path)
 	defer log.Infof(2, "END getQueryEntryAttr(%v)", path)
 
+	if len(path) == 0 || path[0] == "" {
+		return nil, fuse.ENOENT
+	}
 	if len(path) == 1 && path[0] == helpFilename {
 		now := time.Now()
 		return &fuse.Attr{Mode: fuse.S_IFREG | 0444, Nlink: 1, Size: uint64(len(queryDirHelp)), Mtime: uint64(now.Unix()), Mtimensec: uint32(now.Nanosecond())}, fuse.OK
@@ -854,7 +957,7 @@ func (vfs FuseVfs) getQueryEntryAttr(path []string) (result *fuse.Attr, status f
 	if len(path) > 1 {
 		fileId := vfs.parseFileId(name)
 		if fileId != 0 {
-			return vfs.getFileEntryAttr(fileId)
+			return vfs.getFileEntryAttr(append([]string{queriesDir}, path...), fileId)
 		}
 
 		return nil, fuse.ENOENT
@@ -929,7 +1032,7 @@ func (vfs FuseVfs) getDatabaseFileAttr() (*fuse.Attr, fuse.Status) {
 	return &fuse.Attr{Mode: fuse.S_IFLNK | 0755, Size: uint64(fileInfo.Size()), Mtime: uint64(modTime.Unix()), Mtimensec: uint32(modTime.Nanosecond())}, fuse.OK
 }
 
-func (vfs FuseVfs) getFileEntryAttr(fileId entities.FileId) (result *fuse.Attr, status fuse.Status) {
+func (vfs FuseVfs) getFileEntryAttr(path []string, fileId entities.FileId) (result *fuse.Attr, status fuse.Status) {
 	tx, cancel, err := vfs.beginSQL()
 	if err != nil {
 		log.Warnf("could not begin transaction: %v", err)
@@ -939,40 +1042,44 @@ func (vfs FuseVfs) getFileEntryAttr(fileId entities.FileId) (result *fuse.Attr, 
 	status = fuse.EIO
 	defer func() { status = finishTransaction(tx, status) }()
 
-	file, err := vfs.store.File(tx, fileId)
-	if err != nil {
-		log.Warnf("could not retrieve file #%v: %v", fileId, err)
-		return nil, fuse.EIO
-	}
-	if file == nil {
-		return &fuse.Attr{Mode: fuse.S_IFREG}, fuse.ENOENT
+	file, status := vfs.taggedFile(tx, path)
+	if status != fuse.OK {
+		return nil, status
 	}
 
 	fileInfo, err := os.Stat(file.Path())
-	var size int64
-	var modTime time.Time
-	if err == nil {
-		size = fileInfo.Size()
-		modTime = fileInfo.ModTime()
-	} else {
-		size = 0
-		modTime = time.Time{}
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fuse.ENOENT
+		}
+		log.Warnf("could not stat file '%v': %v", file.Path(), err)
+		return nil, fuse.EIO
 	}
 
-	return &fuse.Attr{Mode: fuse.S_IFLNK | 0755, Size: uint64(size), Mtime: uint64(modTime.Unix()), Mtimensec: uint32(modTime.Nanosecond())}, fuse.OK
+	modTime := fileInfo.ModTime()
+	return &fuse.Attr{Mode: fuse.S_IFLNK | 0755, Size: uint64(fileInfo.Size()), Mtime: uint64(modTime.Unix()), Mtimensec: uint32(modTime.Nanosecond())}, fuse.OK
 }
 
 func (vfs FuseVfs) openTaggedEntryDir(tx *storage.Tx, path []string) ([]fuse.DirEntry, fuse.Status) {
 	log.Infof(2, "BEGIN openTaggedEntryDir(%v)", path)
 	defer log.Infof(2, "END openTaggedEntryDir(%v)", path)
 
+	if len(path) == 0 || path[len(path)-1] == "" {
+		return nil, fuse.ENOENT
+	}
 	lastPathElement := path[len(path)-1]
 
 	if lastPathElement == filesDir {
 		return vfs.openTaggedEntryFilesDir(tx, path[:len(path)-1])
 	}
+	if _, status := vfs.resolveTagAssociations(tx, path); status != fuse.OK {
+		return nil, status
+	}
 
-	expression := pathToExpression(path)
+	expression, valid := pathToExpression(path)
+	if !valid {
+		return nil, fuse.ENOENT
+	}
 	furtherTagNames, err := vfs.store.VFSNames(tx, expression, nil)
 	if err != nil {
 		log.Warnf("could not retrieve further tags: %v", err)
@@ -981,8 +1088,11 @@ func (vfs FuseVfs) openTaggedEntryDir(tx *storage.Tx, path []string) ([]fuse.Dir
 
 	var valueNames []string
 	if lastPathElement[0] != '=' {
-		parent := pathToExpression(path[:len(path)-1])
-		tagName := unescape(lastPathElement)
+		parent, valid := pathToExpression(path[:len(path)-1])
+		if !valid {
+			return nil, fuse.ENOENT
+		}
+		tagName := unescapeTag(lastPathElement)
 		valueNames, err = vfs.store.VFSNames(tx, parent, &tagName)
 		if err != nil {
 			log.Warnf("could not retrieve values for '%v': %v", tagName, err)
@@ -991,19 +1101,17 @@ func (vfs FuseVfs) openTaggedEntryDir(tx *storage.Tx, path []string) ([]fuse.Dir
 	}
 
 	entries := make([]fuse.DirEntry, 0, len(valueNames)+len(furtherTagNames)+1)
+	selected := make(map[string]bool)
+	selections, _ := parseTagPath(path)
+	for _, selection := range selections {
+		selected[selection.tagName] = true
+	}
 	for _, tagName := range furtherTagNames {
-		tagName = escape(tagName)
-
-		if tagName == filesDir {
+		if selected[tagName] {
 			continue
 		}
 
-		// Never re-list selected tags; value directories remain available above.
-		if containsString(path, tagName) {
-			continue
-		}
-
-		entries = append(entries, fuse.DirEntry{Name: tagName, Mode: fuse.S_IFDIR | 0755})
+		entries = append(entries, fuse.DirEntry{Name: escapeTag(tagName), Mode: fuse.S_IFDIR | 0755})
 	}
 
 	for _, valueName := range valueNames {
@@ -1020,7 +1128,16 @@ func (vfs FuseVfs) openTaggedEntryFilesDir(tx *storage.Tx, path []string) ([]fus
 	log.Infof(2, "BEGIN openTaggedEntryFilesDir(%v)", path)
 	defer log.Infof(2, "END openTaggedEntryFilesDir(%v)", path)
 
-	expression := pathToExpression(path)
+	if len(path) == 0 {
+		return nil, fuse.ENOENT
+	}
+	if _, status := vfs.resolveTagAssociations(tx, path); status != fuse.OK {
+		return nil, status
+	}
+	expression, valid := pathToExpression(path)
+	if !valid {
+		return nil, fuse.ENOENT
+	}
 	files, err := vfs.store.FilesForQuery(tx, expression, "", false, false, "name")
 	if err != nil {
 		log.Warnf("could not query files: %v", err)
@@ -1041,6 +1158,9 @@ func (vfs FuseVfs) openQueryEntryDir(tx *storage.Tx, path []string) ([]fuse.DirE
 	log.Infof(2, "BEGIN openQueryEntryDir(%v)", path)
 	defer log.Infof(2, "END openQueryEntryDir(%v)", path)
 
+	if len(path) != 1 || path[0] == "" {
+		return nil, fuse.ENOENT
+	}
 	queryText := path[0]
 
 	expression, err := query.Parse(queryText)
@@ -1091,21 +1211,9 @@ func (vfs FuseVfs) readTaggedEntryLink(tx *storage.Tx, path []string) (string, f
 	log.Infof(2, "BEGIN readTaggedEntryLink(%v)", path)
 	defer log.Infof(2, "END readTaggedEntryLink(%v)", path)
 
-	name := path[len(path)-1]
-
-	fileId := vfs.parseFileId(name)
-	if fileId == 0 {
-		return "", fuse.ENOENT
-	}
-
-	file, err := vfs.store.File(tx, fileId)
-	if err != nil {
-		log.Warnf("could not find file %v in database: %v", fileId, err)
-		return "", fuse.EIO
-	}
-
-	if file == nil {
-		return "", fuse.ENOENT
+	file, status := vfs.taggedFile(tx, path)
+	if status != fuse.OK {
+		return "", status
 	}
 
 	absDirPath := filepath.Join(vfs.mountPath, filepath.Join(path[:len(path)-1]...))
@@ -1116,6 +1224,59 @@ func (vfs FuseVfs) readTaggedEntryLink(tx *storage.Tx, path []string) (string, f
 	}
 
 	return relPath, fuse.OK
+}
+
+func (vfs FuseVfs) taggedFile(tx *storage.Tx, path []string) (*entities.File, fuse.Status) {
+	if len(path) < 3 || path[len(path)-1] == "" {
+		return nil, fuse.ENOENT
+	}
+	fileId := vfs.parseFileId(path[len(path)-1])
+	if fileId == 0 {
+		return nil, fuse.ENOENT
+	}
+	file, err := vfs.store.File(tx, fileId)
+	if err != nil {
+		log.Warnf("could not retrieve file #%v: %v", fileId, err)
+		return nil, fuse.EIO
+	}
+	if file == nil || vfs.getLinkName(file) != path[len(path)-1] {
+		return nil, fuse.ENOENT
+	}
+
+	var expression query.Expression
+	switch path[0] {
+	case tagsDir:
+		if len(path) < 4 || path[len(path)-2] != filesDir {
+			return nil, fuse.ENOENT
+		}
+		var valid bool
+		expression, valid = pathToExpression(path[1 : len(path)-2])
+		if !valid {
+			return nil, fuse.ENOENT
+		}
+	case queriesDir:
+		if len(path) != 3 || path[1] == "" {
+			return nil, fuse.ENOENT
+		}
+		expression, err = query.Parse(path[1])
+		if err != nil {
+			return nil, fuse.ENOENT
+		}
+	default:
+		return nil, fuse.ENOENT
+	}
+
+	files, err := vfs.store.FilesForQuery(tx, expression, "", false, false, "name")
+	if err != nil {
+		log.Warnf("could not query files: %v", err)
+		return nil, fuse.EIO
+	}
+	for _, candidate := range files {
+		if candidate.Id == fileId {
+			return file, fuse.OK
+		}
+	}
+	return nil, fuse.ENOENT
 }
 
 func (vfs FuseVfs) getLinkName(file *entities.File) string {
@@ -1131,48 +1292,106 @@ func (vfs FuseVfs) getLinkName(file *entities.File) string {
 	return linkName + suffix
 }
 
-func (vfs FuseVfs) tagNamesToIds(tx *storage.Tx, tagNames []string) (entities.TagIds, error) {
-	tagIds := make(entities.TagIds, len(tagNames))
-
-	for index, tagName := range tagNames {
-		tag, err := vfs.store.TagByName(tx, tagName)
-		if err != nil {
-			return nil, fmt.Errorf("could not retrieve tag '%v': %v", tagName, err)
-		}
-		if tag == nil {
-			return nil, nil
-		}
-
-		tagIds[index] = tag.Id
-	}
-
-	return tagIds, nil
+type tagSelection struct {
+	tagName   string
+	valueName string
+	hasValue  bool
 }
 
-func pathToExpression(path []string) query.Expression {
-	var expression query.Expression = query.EmptyExpression{}
+type tagAssociation struct {
+	tagId   entities.TagId
+	valueId entities.ValueId
+}
 
-	for index, element := range path {
-		var elementExpression query.Expression
-
+func parseTagPath(path []string) ([]tagSelection, bool) {
+	selections := make([]tagSelection, 0, len(path))
+	for _, element := range path {
+		if element == "" || element == filesDir {
+			return nil, false
+		}
 		if element[0] == '=' {
-			tagName := unescape(path[index-1])
-			valueName := unescape(element[1:])
-
-			elementExpression = query.ComparisonExpression{query.TagExpression{tagName}, "==", query.ValueExpression{valueName}}
-		} else {
-			if index+1 < len(path) && path[index+1][0] == '=' {
-				continue
+			if len(selections) == 0 || selections[len(selections)-1].hasValue {
+				return nil, false
 			}
+			valueName := unescape(element[1:])
+			if element != "="+escape(valueName) && (element != "="+legacyEscape(valueName) || isWindowsDeviceName(valueName)) {
+				return nil, false
+			}
+			selections[len(selections)-1].valueName = valueName
+			selections[len(selections)-1].hasValue = true
+			continue
+		}
+		tagName, valid := tagPathName(element)
+		if !valid {
+			return nil, false
+		}
+		selections = append(selections, tagSelection{tagName: tagName})
+	}
+	return selections, true
+}
 
-			tagName := unescape(element)
-			elementExpression = query.TagExpression{tagName}
+func (vfs FuseVfs) resolveTagAssociations(tx *storage.Tx, path []string) ([]tagAssociation, fuse.Status) {
+	selections, valid := parseTagPath(path)
+	if !valid {
+		return nil, fuse.ENOENT
+	}
+	associations := make([]tagAssociation, 0, len(selections))
+	for _, selection := range selections {
+		tag, err := vfs.store.TagByName(tx, selection.tagName)
+		if err != nil {
+			log.Warnf("could not retrieve tag '%v': %v", selection.tagName, err)
+			return nil, fuse.EIO
+		}
+		if tag == nil {
+			return nil, fuse.ENOENT
+		}
+		var valueId entities.ValueId
+		if selection.hasValue {
+			value, err := vfs.store.ValueByName(tx, selection.valueName)
+			if err != nil {
+				log.Warnf("could not retrieve value '%v': %v", selection.valueName, err)
+				return nil, fuse.EIO
+			}
+			if value == nil {
+				return nil, fuse.ENOENT
+			}
+			valueId = value.Id
+		}
+		association := tagAssociation{tag.Id, valueId}
+		if !hasTagAssociation(associations, association) {
+			associations = append(associations, association)
+		}
+	}
+	return associations, fuse.OK
+}
+
+func hasTagAssociation(associations []tagAssociation, selected tagAssociation) bool {
+	for _, association := range associations {
+		if association.tagId == selected.tagId && association.valueId == selected.valueId {
+			return true
+		}
+	}
+	return false
+}
+
+func pathToExpression(path []string) (query.Expression, bool) {
+	selections, valid := parseTagPath(path)
+	if !valid {
+		return nil, false
+	}
+	var expression query.Expression = query.EmptyExpression{}
+	for _, selection := range selections {
+		var elementExpression query.Expression
+		if selection.hasValue {
+			elementExpression = query.ComparisonExpression{query.TagExpression{selection.tagName}, "==", query.ValueExpression{selection.valueName}}
+		} else {
+			elementExpression = query.TagExpression{selection.tagName}
 		}
 
 		expression = query.AndExpression{expression, elementExpression}
 	}
 
-	return expression
+	return expression, true
 }
 
 func fileIdToAscii(fileId entities.FileId) string {
@@ -1194,24 +1413,152 @@ func containsTag(tags entities.Tags, tagName string) bool {
 	return false
 }
 
-func containsString(values []string, value string) bool {
-	for _, v := range values {
-		if v == value {
-			return true
-		}
-	}
-
-	return false
-}
+const escapeMarker = "\u200B"
 
 func escape(name string) string {
+	runes := []rune(name)
+	lastNonTrailing := len(runes)
+	for lastNonTrailing > 0 && (runes[lastNonTrailing-1] == '.' || runes[lastNonTrailing-1] == ' ') {
+		lastNonTrailing--
+	}
+
+	var escaped strings.Builder
+	for index, r := range runes {
+		switch {
+		case r == '\u200B':
+			escaped.WriteString(escapeMarker + escapeMarker)
+		case r == '/':
+			escaped.WriteString(escapeMarker + "\u2215")
+		case r == '\\':
+			escaped.WriteString(escapeMarker + "\u2216")
+		case r == ':':
+			escaped.WriteString(escapeMarker + "\u2236")
+		case r == '*':
+			escaped.WriteString(escapeMarker + "\u2217")
+		case r == '?':
+			escaped.WriteString(escapeMarker + "\uFF1F")
+		case r == '"':
+			escaped.WriteString(escapeMarker + "\uFF02")
+		case r == '<':
+			escaped.WriteString(escapeMarker + "\u2039")
+		case r == '>':
+			escaped.WriteString(escapeMarker + "\u203A")
+		case r == '|':
+			escaped.WriteString(escapeMarker + "\u2223")
+		case index >= lastNonTrailing && r == '.':
+			escaped.WriteString(escapeMarker + "\u2024")
+		case index >= lastNonTrailing && r == ' ':
+			escaped.WriteString(escapeMarker + "\u2423")
+		case r <= '\u001F' || r == '\u007F':
+			escaped.WriteString(escapeMarker)
+			if r == '\u007F' {
+				escaped.WriteRune('\u2421')
+			} else {
+				escaped.WriteRune('\u2400' + r)
+			}
+		default:
+			escaped.WriteRune(r)
+		}
+	}
+	result := escaped.String()
+	if isWindowsDeviceName(name) {
+		return escapeMarker + "n" + result
+	}
+	return result
+}
+
+func escapeTag(name string) string {
+	escaped := escape(name)
+	if strings.EqualFold(name, filesDir) || strings.EqualFold(name, helpFilename) || strings.HasPrefix(name, "=") {
+		return escapeMarker + "n" + escaped
+	}
+	return escaped
+}
+
+func tagPathName(element string) (string, bool) {
+	name := unescapeTag(element)
+	if element == escapeTag(name) {
+		return name, true
+	}
+	if element != legacyEscape(name) || strings.EqualFold(name, filesDir) || strings.EqualFold(name, helpFilename) || strings.HasPrefix(name, "=") || isWindowsDeviceName(name) {
+		return "", false
+	}
+	return name, true
+}
+
+func unescape(name string) string {
+	name = strings.TrimPrefix(name, escapeMarker+"n")
+	runes := []rune(name)
+	var unescaped strings.Builder
+	for index := 0; index < len(runes); index++ {
+		r := runes[index]
+		if r != '\u200B' || index+1 == len(runes) {
+			unescaped.WriteRune(r)
+			continue
+		}
+
+		index++
+		next := runes[index]
+		switch {
+		case next == '\u200B':
+			unescaped.WriteRune('\u200B')
+		case next == '\u2215':
+			unescaped.WriteRune('/')
+		case next == '\u2216':
+			unescaped.WriteRune('\\')
+		case next == '\u2236':
+			unescaped.WriteRune(':')
+		case next == '\u2217':
+			unescaped.WriteRune('*')
+		case next == '\uFF1F':
+			unescaped.WriteRune('?')
+		case next == '\uFF02':
+			unescaped.WriteRune('"')
+		case next == '\u2039':
+			unescaped.WriteRune('<')
+		case next == '\u203A':
+			unescaped.WriteRune('>')
+		case next == '\u2223':
+			unescaped.WriteRune('|')
+		case next == '\u2024':
+			unescaped.WriteRune('.')
+		case next == '\u2423':
+			unescaped.WriteRune(' ')
+		case next >= '\u2400' && next <= '\u241F':
+			unescaped.WriteRune(next - '\u2400')
+		case next == '\u2421':
+			unescaped.WriteRune('\u007F')
+		default:
+			unescaped.WriteRune('\u200B')
+			unescaped.WriteRune(next)
+		}
+	}
+	return unescaped.String()
+}
+
+func unescapeTag(name string) string {
+	return unescape(name)
+}
+
+func legacyEscape(name string) string {
 	name = strings.Replace(name, `/`, "\u200B\u2215", -1)
 	name = strings.Replace(name, `\`, "\u200B\u2216", -1)
 	return name
 }
 
-func unescape(name string) string {
-	name = strings.Replace(name, "\u200B\u2215", `/`, -1)
-	name = strings.Replace(name, "\u200B\u2216", `\`, -1)
-	return name
+func isWindowsDeviceName(name string) bool {
+	base := name
+	if dot := strings.IndexByte(base, '.'); dot >= 0 {
+		base = base[:dot]
+	}
+	base = strings.ToUpper(strings.TrimRight(base, " ."))
+	switch base {
+	case "CON", "PRN", "AUX", "NUL":
+		return true
+	}
+	if strings.HasPrefix(base, "COM") || strings.HasPrefix(base, "LPT") {
+		suffix := strings.TrimPrefix(strings.TrimPrefix(base, "COM"), "LPT")
+		return (len(suffix) == 1 && suffix[0] >= '1' && suffix[0] <= '9') || suffix == "¹" || suffix == "²" || suffix == "³"
+	}
+	return false
 }

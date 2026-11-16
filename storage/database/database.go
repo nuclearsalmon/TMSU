@@ -19,6 +19,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	_ "github.com/mattn/go-sqlite3" // initialised Sqlite3
 	"github.com/oniony/TMSU/common/log"
 	"net/url"
@@ -91,6 +92,51 @@ func OpenAt(path string) (*Database, error) {
 		return nil, DatabaseTransactionError{path, err}
 	}
 
+	return &Database{db}, nil
+}
+
+func OpenReadOnlyAt(path string) (*Database, error) {
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil, DatabaseNotFoundError{path}
+		}
+		return nil, DatabaseAccessError{path, err}
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, DatabaseAccessError{path, err}
+	}
+	u := url.URL{Scheme: "file", Path: filepath.ToSlash(absPath), RawQuery: "mode=ro"}
+	db, err := sql.Open("sqlite3", u.String())
+	if err != nil {
+		return nil, DatabaseAccessError{path, err}
+	}
+	tx, err := db.Begin()
+	if err != nil {
+		db.Close()
+		return nil, DatabaseTransactionError{path, err}
+	}
+	version, err := currentSchemaVersion(tx)
+	if err != nil {
+		tx.Rollback()
+		db.Close()
+		return nil, err
+	}
+	if version != latestSchemaVersion {
+		tx.Rollback()
+		db.Close()
+		if version == (schemaVersion{}) {
+			return nil, fmt.Errorf("database has no initialized schema; run 'tmsu init' with write access")
+		}
+		if version.GreaterThan(latestSchemaVersion) {
+			return nil, fmt.Errorf("database schema version %v is newer than supported version %v", version, latestSchemaVersion)
+		}
+		return nil, fmt.Errorf("database schema version %v requires a writable open to upgrade to %v", version, latestSchemaVersion)
+	}
+	if err := tx.Commit(); err != nil {
+		db.Close()
+		return nil, DatabaseTransactionError{path, err}
+	}
 	return &Database{db}, nil
 }
 

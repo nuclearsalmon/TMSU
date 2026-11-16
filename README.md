@@ -4,6 +4,16 @@ This is a community fork of [TMSU](https://github.com/oniony/TMSU), maintained f
 
 **These changes were generated with the assistance of a large language model (LLM). This fork is provided as-is, without any guarantees or warranties, express, implied, or otherwise. Use it at your own risk and maintain backups.**
 
+## Database opening and read-only use
+
+`storage.OpenAt` opens the database for normal use and upgrades supported older schemas in a transaction. If the database file exists but has no schema version, it initializes the schema; this also happens for read commands because they use the same open path. Newer and malformed version tables are rejected, and failed upgrades roll back. Before the first command after upgrading TMSU, stop database writers and make a consistent SQLite backup, for example `sqlite3 "$TMSU_DB" ".backup '$TMSU_DB.before-tmsu-upgrade'"`.
+
+`storage.OpenReadOnlyAt` never upgrades the schema. It opens only the current schema version; older databases return an error that they need a writable open to upgrade, while newer or malformed version tables are rejected. `storage/database.SnapshotAt` writes a consistent SQLite snapshot to the destination path without changing the source. `repair --pretend` uses a temporary destination and rolls back its transaction. It is the only CLI dry-run option; ordinary commands, including reads, use `OpenAt` and may initialize or upgrade a database.
+
+## Development checks
+
+CI validates Ubuntu Linux with Go 1.23. SQLite uses `go-sqlite3` with CGO, so Go tests and benchmarks require a C compiler. The default suite does not mount FUSE; real mount checks remain optional. CI runs `go test -count=2 ./...`, `go test -race ./...`, a `gofmt` check, and the CLI integration suite.
+
 The original project's documentation follows.
 
 ![TMSU](http://tmsu.org/images/tmsu.png)

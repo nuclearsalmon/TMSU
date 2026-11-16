@@ -22,10 +22,12 @@ func fixture(tb testing.TB) *storage.Storage {
 	if err != nil {
 		tb.Fatal(err)
 	}
+	tb.Cleanup(func() { _ = db.Close() })
 	tx, err := db.Begin()
 	if err != nil {
 		tb.Fatal(err)
 	}
+	tb.Cleanup(func() { _ = tx.Rollback() })
 	exec := func(q string, args ...interface{}) {
 		tb.Helper()
 		if _, err := tx.Exec(q, args...); err != nil {

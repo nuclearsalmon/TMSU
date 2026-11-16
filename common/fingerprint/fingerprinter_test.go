@@ -82,12 +82,12 @@ func testCreateForLargeFile(test *testing.T, algorithm string, expectedFingerpri
 }
 
 func testCreateForFile(test *testing.T, algorithm string, size uint, expectedFingerprint Fingerprint) {
-	tempFilePath := filepath.Join(os.TempDir(), "tmsu-fingerprint")
+	tempFilePath := filepath.Join(test.TempDir(), "tmsu-fingerprint")
 	file, err := os.Create(tempFilePath)
 	if err != nil {
 		test.Fatal(err.Error())
 	}
-	defer os.Remove(tempFilePath)
+	defer file.Close()
 
 	_, err = file.WriteAt([]byte("!"), int64(size-1))
 	if err != nil {
